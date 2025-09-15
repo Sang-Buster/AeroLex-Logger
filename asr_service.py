@@ -127,6 +127,16 @@ class AudioBuffer:
         # Initialize VAD
         self.vad = self._init_vad()
 
+        # VAD engine specific buffers
+        if VAD_ENGINE == "silero":
+            self.silero_buffer = []
+            self.silero_buffer_duration = 1.0  # Seconds of audio to accumulate for VAD
+        elif VAD_ENGINE == "webrtc":
+            # WebRTC VAD smoothing - track recent VAD decisions
+            self.webrtc_history = []
+            self.webrtc_history_size = 5  # Keep last N VAD decisions
+            self.webrtc_speech_threshold = 0.6  # 60% of recent frames must be speech
+
     def _init_vad(self):
         """Initialize the VAD engine based on what's available."""
         if VAD_ENGINE == "webrtc":
@@ -137,7 +147,7 @@ class AudioBuffer:
             raise RuntimeError("No VAD engine available")
 
     def _detect_speech_webrtc(self, audio_chunk: np.ndarray) -> bool:
-        """Detect speech using WebRTC VAD."""
+        """Detect speech using WebRTC VAD with smoothing."""
         # Convert float32 to int16 for WebRTC VAD
         audio_int16 = (audio_chunk * 32767).astype(np.int16).tobytes()
 
@@ -149,13 +159,44 @@ class AudioBuffer:
 
         # Take the first complete frame
         frame = audio_int16[: frame_size * 2]
-        return self.vad.is_speech(frame, self.sample_rate)
+        is_speech_frame = self.vad.is_speech(frame, self.sample_rate)
+
+        # Add to history for smoothing
+        self.webrtc_history.append(is_speech_frame)
+        if len(self.webrtc_history) > self.webrtc_history_size:
+            self.webrtc_history.pop(0)
+
+        # Smooth decision: require threshold percentage of recent frames to be speech
+        if len(self.webrtc_history) >= 3:  # Need at least 3 frames
+            speech_ratio = sum(self.webrtc_history) / len(self.webrtc_history)
+            return speech_ratio >= self.webrtc_speech_threshold
+
+        # Not enough history yet, use raw decision
+        return is_speech_frame
 
     def _detect_speech_silero(self, audio_chunk: np.ndarray) -> bool:
         """Detect speech using Silero VAD."""
-        # Silero VAD expects torch tensor
-        audio_tensor = torch.from_numpy(audio_chunk)
+        # Accumulate audio chunks for Silero VAD (needs longer context)
+        self.silero_buffer.extend(audio_chunk)
+
+        # Calculate required buffer size
+        required_samples = int(self.silero_buffer_duration * self.sample_rate)
+
+        # Only run VAD when we have enough audio
+        if len(self.silero_buffer) < required_samples:
+            return False  # Not enough audio yet, assume no speech
+
+        # Convert to torch tensor and run VAD on accumulated audio
+        audio_tensor = torch.from_numpy(np.array(self.silero_buffer, dtype=np.float32))
         speech_timestamps = get_speech_timestamps(audio_tensor, self.vad)
+
+        # Keep only recent audio in buffer (sliding window)
+        # Keep 1.5x the buffer duration to provide overlap
+        max_buffer_samples = int(self.silero_buffer_duration * 1.5 * self.sample_rate)
+        if len(self.silero_buffer) > max_buffer_samples:
+            self.silero_buffer = self.silero_buffer[-max_buffer_samples:]
+
+        # Return True if any speech detected in the recent audio
         return len(speech_timestamps) > 0
 
     def detect_speech(self, audio_chunk: np.ndarray) -> bool:
@@ -258,6 +299,12 @@ class AudioBuffer:
         self.is_speech = False
         self.speech_start_time = None
         self.silence_start_time = None
+
+        # Reset VAD engine specific buffers
+        if VAD_ENGINE == "silero" and hasattr(self, "silero_buffer"):
+            self.silero_buffer = []
+        elif VAD_ENGINE == "webrtc" and hasattr(self, "webrtc_history"):
+            self.webrtc_history = []
 
 
 class WhisperTranscriber:
@@ -616,6 +663,33 @@ class ASRService:
 
 def main():
     """Main entry point."""
+    import argparse
+
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="ASR Service - Local Speech Recognition Pipeline"
+    )
+    parser.add_argument(
+        "--vad",
+        choices=["silero", "webrtc"],
+        help="Force specific VAD engine (overrides ASR_VAD env var)",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug mode (equivalent to ASR_DEBUG=1)",
+    )
+    args = parser.parse_args()
+
+    # Override environment variables with command line args
+    if args.vad:
+        os.environ["ASR_VAD"] = args.vad
+        print(f"🔧 VAD engine set to: {args.vad}")
+
+    if args.debug:
+        os.environ["ASR_DEBUG"] = "1"
+        print("🐛 Debug mode enabled")
+
     # Create logs directory
     Path("logs").mkdir(exist_ok=True)
 

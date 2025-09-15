@@ -5,15 +5,11 @@ Helps diagnose audio input and VAD issues, especially with Bluetooth devices.
 """
 
 import time
-import warnings
 
 import numpy as np
 import sounddevice as sd
 import torch
-import webrtcvad
 from silero_vad import get_speech_timestamps, load_silero_vad
-
-warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 
 def list_audio_devices():
@@ -103,49 +99,14 @@ def test_audio_levels(device_id=None, duration=5):
         return None
 
 
-def test_vad_engines(audio_data):
-    """Test both VAD engines on captured audio."""
+def test_vad_engine(audio_data):
+    """Test Silero VAD engine on captured audio."""
     if audio_data is None or len(audio_data) == 0:
-        print("No audio data to test VAD engines")
+        print("No audio data to test VAD engine")
         return
 
-    print(f"\n🤖 Testing VAD Engines on {len(audio_data) / 16000:.1f}s of audio")
+    print(f"\n🤖 Testing Silero VAD on {len(audio_data) / 16000:.1f}s of audio")
     print("=" * 50)
-
-    # Test WebRTC VAD
-    try:
-        vad_webrtc = webrtcvad.Vad(3)  # Most aggressive setting
-
-        # WebRTC needs specific frame sizes
-        sample_rate = 16000
-        frame_duration = 30  # ms
-        frame_size = int(sample_rate * frame_duration / 1000)
-
-        speech_frames = 0
-        total_frames = 0
-
-        for i in range(0, len(audio_data) - frame_size, frame_size):
-            frame = audio_data[i : i + frame_size]
-            audio_bytes = (frame * 32767).astype(np.int16).tobytes()
-
-            try:
-                is_speech = vad_webrtc.is_speech(audio_bytes, sample_rate)
-                if is_speech:
-                    speech_frames += 1
-                total_frames += 1
-            except Exception:
-                pass  # Skip problematic frames
-
-        if total_frames > 0:
-            speech_percentage = (speech_frames / total_frames) * 100
-            print(
-                f"WebRTC VAD: {speech_frames}/{total_frames} frames detected as speech ({speech_percentage:.1f}%)"
-            )
-        else:
-            print("WebRTC VAD: No valid frames processed")
-
-    except Exception as e:
-        print(f"WebRTC VAD failed: {e}")
 
     # Test Silero VAD
     try:
@@ -161,11 +122,21 @@ def test_vad_engines(audio_data):
             print(
                 f"Silero VAD: {len(speech_timestamps)} speech segments, {speech_percentage:.1f}% speech"
             )
+            
+            # Show individual segments
+            for i, (start, end) in enumerate(speech_timestamps[:5]):  # Show first 5
+                duration = (end - start) / 16000  # Convert samples to seconds
+                start_time = start / 16000
+                print(f"  Segment {i+1}: {start_time:.2f}s - {start_time + duration:.2f}s ({duration:.2f}s)")
+            
+            if len(speech_timestamps) > 5:
+                print(f"  ... and {len(speech_timestamps) - 5} more segments")
         else:
             print("Silero VAD: No speech detected")
 
     except Exception as e:
         print(f"Silero VAD failed: {e}")
+        print("Make sure you have torch and silero-vad installed:")
 
 
 def main():
@@ -192,13 +163,13 @@ def main():
         if choice == "1":
             # Test default device
             audio_data = test_audio_levels()
-            test_vad_engines(audio_data)
+            test_vad_engine(audio_data)
 
         elif choice == "2":
             # Select specific device
             device_id = int(input("Enter device ID: "))
             audio_data = test_audio_levels(device_id)
-            test_vad_engines(audio_data)
+            test_vad_engine(audio_data)
 
         elif choice == "3":
             # Test all devices
@@ -207,7 +178,7 @@ def main():
                 print(f"Testing Device [{device_id}]: {device_info['name']}")
                 print(f"{'=' * 60}")
                 audio_data = test_audio_levels(device_id, duration=3)
-                test_vad_engines(audio_data)
+                test_vad_engine(audio_data)
 
         else:
             print("Invalid choice")
@@ -220,10 +191,8 @@ def main():
     print("\n💡 Troubleshooting Tips:")
     print("- If audio levels are very low, check microphone gain/volume")
     print("- For Bluetooth devices, try reconnecting or check codec compatibility")
-    print(
-        "- WebRTC VAD is sensitive to audio quality - try Silero VAD if issues persist"
-    )
-    print("- Use: ASR_VAD=silero ASR_DEBUG=1 uv run asr_service.py")
+    print("- Silero VAD works best with clear speech and minimal background noise")
+    print("- Use: ASR_DEBUG=1 uv run asr_service.py to see VAD activity")
 
 
 if __name__ == "__main__":

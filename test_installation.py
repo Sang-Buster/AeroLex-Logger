@@ -6,10 +6,7 @@ Verifies all dependencies and components are working correctly.
 
 import importlib
 import sys
-import warnings
 from pathlib import Path
-
-warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 
 def test_python_version():
@@ -36,10 +33,6 @@ def test_dependencies():
         ("sounddevice", "SoundDevice"),
         ("faster_whisper", "Faster Whisper"),
         ("jsonlines", "JSON Lines"),
-    ]
-
-    optional_packages = [
-        ("webrtcvad", "WebRTC VAD"),
         ("silero_vad", "Silero VAD"),
     ]
 
@@ -53,20 +46,6 @@ def test_dependencies():
         except ImportError:
             print(f"✗ {name} is missing - install with: pip install {package}")
             all_good = False
-
-    # Test optional packages (VAD engines)
-    vad_available = False
-    for package, name in optional_packages:
-        try:
-            importlib.import_module(package)
-            print(f"✓ {name} is available")
-            vad_available = True
-        except ImportError:
-            print(f"○ {name} not available (optional)")
-
-    if not vad_available:
-        print("⚠ No VAD engines found - install at least one: webrtcvad, silero-vad")
-        all_good = False
 
     return all_good
 
@@ -126,31 +105,9 @@ def test_audio_devices():
             return False
 
     except ImportError:
-        print("○ SoundDevice not available, trying PyAudio...")
-
-        try:
-            import pyaudio
-
-            p = pyaudio.PyAudio()
-
-            input_devices = []
-            for i in range(p.get_device_count()):
-                info = p.get_device_info_by_index(i)
-                if info["maxInputChannels"] > 0:
-                    input_devices.append(info)
-
-            p.terminate()
-
-            if input_devices:
-                print(f"✓ Found {len(input_devices)} audio input device(s) via PyAudio")
-                return True
-            else:
-                print("✗ No audio input devices found via PyAudio")
-                return False
-
-        except ImportError:
-            print("✗ No audio libraries available")
-            return False
+        print("✗ SoundDevice not available")
+        print("  Install with: pip install sounddevice")
+        return False
 
 
 def test_whisper_model():
@@ -209,44 +166,37 @@ def test_whisper_model():
         return False
 
 
-def test_vad_engines():
-    """Test available VAD engines."""
-    print("\nTesting VAD engines...")
+def test_vad_engine():
+    """Test Silero VAD engine."""
+    print("\nTesting Silero VAD engine...")
 
-    vad_engines = [
-        ("webrtcvad", "WebRTC VAD"),
-        ("silero_vad", "Silero VAD"),
-    ]
+    try:
+        from silero_vad import load_silero_vad
 
-    available_engines = []
-
-    for package, name in vad_engines:
-        try:
-            if package == "webrtcvad":
-                import webrtcvad
-
-                # Test basic functionality
-                webrtcvad.Vad(3)  # Just test creation
-                print(f"✓ {name} is working")
-                available_engines.append(name)
-            elif package == "silero_vad":
-                from silero_vad import load_silero_vad
-
-                # Test basic functionality
-                load_silero_vad()  # Just test loading
-                print(f"✓ {name} is working")
-                available_engines.append(name)
-        except ImportError:
-            print(f"○ {name} not available")
-        except Exception as e:
-            print(f"⚠ {name} installed but not working: {e}")
-
-    if available_engines:
-        print(f"✓ Available VAD engines: {', '.join(available_engines)}")
+        # Test basic functionality
+        model = load_silero_vad()  # Test loading
+        print("✓ Silero VAD is working")
+        
+        # Test with dummy audio
+        import numpy as np
+        import torch
+        
+        # Create 1 second of dummy audio
+        dummy_audio = torch.from_numpy(np.random.randn(16000).astype(np.float32))
+        from silero_vad import get_speech_timestamps
+        
+        # This should run without error
+        timestamps = get_speech_timestamps(dummy_audio, model)
+        print(f"✓ VAD inference test passed (detected {len(timestamps)} segments in dummy audio)")
+        
         return True
-    else:
-        print("✗ No working VAD engines found")
-        print("  Install with: pip install webrtcvad silero-vad")
+        
+    except ImportError:
+        print("✗ Silero VAD not available")
+        print("  Install with: pip install silero-vad torch")
+        return False
+    except Exception as e:
+        print(f"⚠ Silero VAD installed but not working: {e}")
         return False
 
 
@@ -262,7 +212,10 @@ def test_file_structure():
         "README.md",
         "asr.service",
         "asr.service.bat",
+        "install_windows.bat",
         "install_linux.sh",
+        "test_audio.py",
+        "test_installation.py",
     ]
 
     all_present = True
@@ -294,7 +247,7 @@ def main():
         ("Dependencies", test_dependencies),
         ("CUDA Support", test_cuda),
         ("Audio Devices", test_audio_devices),
-        ("VAD Engines", test_vad_engines),
+        ("VAD Engine", test_vad_engine),
         ("File Structure", test_file_structure),
         ("Whisper Model", test_whisper_model),
     ]
@@ -340,6 +293,9 @@ def main():
 
         if not results.get("Whisper Model", False):
             print("💡 Try: uv run download_model.py")
+            
+        if not results.get("VAD Engine", False):
+            print("💡 Try: uv add silero-vad torch")
 
     return passed == total
 

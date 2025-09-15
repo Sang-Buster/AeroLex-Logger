@@ -9,10 +9,9 @@ dependencies = [
     "faster-whisper>=1.2.0",
     "jsonlines>=4.0.0",
     "numpy>=2.2.6",
-    "pyaudio>=0.2.14",
     "silero-vad>=6.0.0",
     "sounddevice>=0.5.2",
-    "webrtcvad>=2.0.10",
+    "torch>=2.0.0",
 ]
 
 [tool.uv]

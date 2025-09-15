@@ -7,13 +7,9 @@ Downloads and verifies Whisper large-v3-turbo model for local inference.
 import logging
 import os
 import sys
-import warnings
 from pathlib import Path
 
 from faster_whisper import WhisperModel
-
-# Suppress the pkg_resources deprecation warning from webrtcvad
-warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 # Setup logging
 logging.basicConfig(

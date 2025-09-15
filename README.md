@@ -5,7 +5,7 @@ A robust, cross-platform automatic speech recognition (ASR) pipeline designed fo
 ## 🎯 Features
 
 - **Local Processing**: No cloud API calls - everything runs locally
-- **Real-time VAD**: Voice Activity Detection using Silero VAD or WebRTC VAD
+- **Real-time VAD**: Voice Activity Detection using Silero VAD
 - **GPU Acceleration**: Whisper large-v3-turbo with CUDA support on RTX 3090
 - **Cross-Platform**: Works on both Windows and Linux
 - **Persistent Service**: Auto-start and auto-restart capabilities
@@ -16,10 +16,10 @@ A robust, cross-platform automatic speech recognition (ASR) pipeline designed fo
 ## 🏗️ Architecture
 
 ```
-Microphone → Audio Buffer → VAD Engine → Whisper large-v3-turbo → JSON Logs + Audio Files
+Microphone → Audio Buffer → Silero VAD → Whisper large-v3-turbo → JSON Logs + Audio Files
      ↓            ↓             ↓              ↓                    ↓
   16kHz Mono   Real-time    Speech/Silence   GPU Inference    Structured Output + WAV
-                           (Silero/WebRTC)
+                           (ML-based)
 ```
 
 ## 📁 Project Structure
@@ -30,7 +30,8 @@ asr-pipeline/
 ├── download_model.py       # Model download and verification
 ├── pyproject.toml         # Python project configuration and dependencies
 ├── asr.service            # Linux systemd unit file
-├── install_service.bat    # Windows service installer
+├── install_windows.bat    # Windows installation script
+├── asr.service.bat        # Windows service runner
 ├── README.md              # This file
 ├── logs/                  # Log output directory
 │   ├── asr_results.jsonl  # Transcription results
@@ -79,9 +80,6 @@ uv run asr_service.py
 
 # Or with debug mode to see VAD activity
 ASR_DEBUG=1 uv run asr_service.py
-
-# Or switch to WebRTC VAD (lighter but less robust)
-ASR_VAD=webrtc ASR_DEBUG=1 uv run asr_service.py
 ```
 
 The service should start capturing audio and display VAD engine information. Speak into your microphone and check `logs/asr_results.jsonl` for transcription results.
@@ -117,15 +115,31 @@ sudo systemctl status asr.service
 #### Windows (Task Scheduler)
 
 ```batch
-# Run as Administrator
-install_service.bat
+# Run as Administrator (one-time setup)
+install_windows.bat
 ```
 
 The installer will:
+
+- Install dependencies and create virtual environment
+- Download Whisper model
 - Create a system-level scheduled task that runs on user logon
 - Configure automatic restart on failure
 - Set up proper working directory and permissions
 - Run with elevated privileges for hardware access
+
+After installation, the service runs automatically. To manually start/stop:
+
+```batch
+# Start service
+schtasks /run /tn "ASR_Pipeline"
+
+# Stop service
+taskkill /f /im python.exe
+
+# Check logs
+type logs\asr.out
+```
 
 ## 📊 Output Format
 
@@ -143,7 +157,7 @@ Transcription results are saved to `logs/asr_results.jsonl` in JSON Lines format
 - `transcript`: Transcribed text
 - `confidence`: Confidence score (0.0-1.0, higher is better)
 - `timestamp`: ISO format timestamp when transcription completed
-- `vad_engine`: VAD engine used (silero or webrtc)
+- `vad_engine`: VAD engine used (silero)
 - `audio_file`: Path to saved WAV file containing the audio segment
 
 ## ⚙️ Configuration
@@ -157,33 +171,27 @@ class Config:
     SAMPLE_RATE = 16000      # Audio sample rate
     CHANNELS = 1             # Mono audio
     CHUNK_SIZE = 1024        # Buffer size (adjust for performance)
-    
+
     # VAD settings
     SPEECH_TIMEOUT = 1.0     # Silence duration to end speech segment
     MIN_SPEECH_DURATION = 0.5 # Minimum speech length to process
     OVERLAP_DURATION = 0.3   # Overlap between segments
-    
+
     # Audio storage
     SAVE_AUDIO_SEGMENTS = True  # Set to False to disable audio saving
     AUDIO_DIR = "audios"        # Directory for saved audio files
 ```
 
-### VAD Engine Selection
+### VAD Engine
 
-The service uses Silero VAD by default. To switch to WebRTC VAD:
+The service uses Silero VAD, a machine learning-based Voice Activity Detection engine that provides:
 
-```bash
-# Use WebRTC VAD instead of Silero
-ASR_VAD=webrtc uv run asr_service.py
+- **High Accuracy**: ML-based detection works well in noisy environments
+- **Robust Performance**: Better handling of various audio conditions
+- **No Compilation Issues**: Pure Python implementation with PyTorch
+- **Real-time Processing**: Optimized for continuous audio streams
 
-# Or set as environment variable
-export ASR_VAD=webrtc
-uv run asr_service.py
-```
-
-**VAD Engine Comparison:**
-- **Silero VAD**: ML-based, better for noisy environments, more robust (default)
-- **WebRTC VAD**: Lightweight, fast, good for clear audio
+Silero VAD automatically adapts to different audio conditions and provides more reliable speech detection compared to traditional signal processing approaches.
 
 ### GPU Settings
 
@@ -198,15 +206,20 @@ CUDA_VISIBLE_DEVICES="" uv run asr_service.py
 ### Common Issues
 
 #### No Audio Input
+
 ```bash
 # Linux: Check audio devices
 arecord -l
 
+# Test audio with debug script
+uv run test_audio.py
+
 # Windows: Check Windows Sound settings
-# Ensure microphone is set as default recording device
+# Ensure microphone is set as default recording device and not muted
 ```
 
 #### CUDA Not Available
+
 ```bash
 # Check NVIDIA driver
 nvidia-smi
@@ -216,18 +229,19 @@ python -c "import torch; print(torch.cuda.is_available())"
 ```
 
 #### VAD Engine Not Found
-The service tries multiple VAD engines in order:
-1. Silero VAD (preferred, ML-based and robust)
-2. WebRTC VAD (lightweight fallback)
 
-Install VAD engines:
+The service uses Silero VAD for voice activity detection.
+
+Install VAD engine:
+
 ```bash
-pip install silero-vad webrtcvad
+pip install silero-vad torch
 ```
 
 #### Service Won't Start
 
 **Linux:**
+
 ```bash
 # Check service logs
 sudo journalctl -u asr.service -f
@@ -237,6 +251,7 @@ sudo chown -R asr:asr /opt/asr
 ```
 
 **Windows:**
+
 ```batch
 # Check scheduled task
 schtasks /query /tn "ASR_Pipeline" /v
@@ -256,6 +271,7 @@ where python
 #### Batch Processing
 
 For higher throughput, consider adjusting:
+
 - `CHUNK_SIZE`: Larger chunks reduce CPU overhead
 - `SPEECH_TIMEOUT`: Longer timeout captures more complete sentences
 - Multiple instances with different audio inputs
@@ -265,6 +281,7 @@ For higher throughput, consider adjusting:
 ### For 20 Identical RTX 3090 Systems
 
 1. **Prepare Master Image**:
+
    ```bash
    # Setup one system completely
    # Test thoroughly
@@ -272,21 +289,22 @@ For higher throughput, consider adjusting:
    ```
 
 2. **Deployment Script** (Linux):
+
    ```bash
    #!/bin/bash
    # deploy_asr.sh
-   
+
    # Copy files
    sudo cp -r asr-pipeline /opt/asr
    sudo chown -R asr:asr /opt/asr
-   
+
    # Sync dependencies
    cd /opt/asr
    sudo -u asr uv sync --python 3.10
-   
+
    # Download model
    sudo -u asr uv run /opt/asr/download_model.py
-   
+
    # Install service
    sudo cp /opt/asr/asr.service /etc/systemd/system/
    sudo systemctl daemon-reload
@@ -307,6 +325,7 @@ For higher throughput, consider adjusting:
 ### Service Health
 
 **Linux:**
+
 ```bash
 # Service status
 sudo systemctl status asr.service
@@ -319,6 +338,7 @@ htop -p $(pgrep -f asr_service.py)
 ```
 
 **Windows:**
+
 ```batch
 # Task status
 schtasks /query /tn "ASR_Pipeline"
@@ -361,6 +381,7 @@ tail -f logs/asr_results.jsonl | jq '.transcript'
 ### Performance Metrics
 
 Monitor these files for service health:
+
 - `asr.out`: Service status and info messages
 - `asr.err`: Error messages and warnings
 - `asr_results.jsonl`: Transcription output

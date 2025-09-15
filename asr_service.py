@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ASR Service - Local Speech Recognition Pipeline
-Mic → WebRTC VAD → Whisper large-v3-turbo → JSON logs
+Mic → Silero VAD → Whisper large-v3-turbo → JSON logs
 
 Continuously captures audio, detects speech with VAD, and transcribes using Whisper.
 Cross-platform compatible (Windows/Linux) with robust error handling.
@@ -14,7 +14,6 @@ import signal
 import sys
 import threading
 import time
-import warnings
 import wave
 from datetime import datetime
 from pathlib import Path
@@ -24,21 +23,12 @@ import jsonlines
 import numpy as np
 from faster_whisper import WhisperModel  # noqa: E402
 
-warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-
 # Audio and ML imports
 try:
     import sounddevice as sd
 except ImportError:
-    try:
-        import pyaudio
-
-        sd = None  # Fallback to pyaudio
-    except ImportError:
-        print(
-            "ERROR: Neither sounddevice nor pyaudio found. Install with: pip install sounddevice"
-        )
-        sys.exit(1)
+    print("ERROR: sounddevice not found. Install with: pip install sounddevice")
+    sys.exit(1)
 
 # VAD imports - try multiple options
 VAD_ENGINE = None
@@ -57,24 +47,19 @@ if os.environ.get("ASR_VAD", "").lower() == "silero":
         )
         sys.exit(1)
 else:
-    # Default priority: Silero -> WebRTC (changed to prefer Silero)
+    # Using Silero VAD only (WebRTC VAD removed due to Windows compilation issues)
     try:
         import torch
         from silero_vad import get_speech_timestamps, load_silero_vad
 
         VAD_ENGINE = "silero"
-        print("🔧 Using Silero VAD (default)")
+        print("🔧 Using Silero VAD")
     except ImportError:
-        try:
-            import webrtcvad
-
-            VAD_ENGINE = "webrtc"
-            print("🔧 Silero VAD not available, using WebRTC VAD")
-        except ImportError:
-            print(
-                "ERROR: No VAD engine found. Install with: pip install webrtcvad silero-vad"
-            )
-            sys.exit(1)
+        print(
+            "ERROR: Silero VAD not found. Install with: pip install silero-vad torch"
+        )
+        print("Make sure you have run install_windows.bat to set up dependencies.")
+        sys.exit(1)
 
 
 # Configuration
@@ -86,7 +71,7 @@ class Config:
     DTYPE = np.float32
 
     # VAD settings
-    VAD_FRAME_DURATION_MS = 30  # 30ms frames for WebRTC VAD
+    VAD_FRAME_DURATION_MS = 30  # Frame duration (legacy setting)
     VAD_AGGRESSIVENESS = 3  # 0-3, higher = more aggressive
     SPEECH_TIMEOUT = 1.0  # Seconds of silence to end speech segment
     MIN_SPEECH_DURATION = 0.5  # Minimum speech duration to process
@@ -95,7 +80,7 @@ class Config:
     # Debug settings
     SHOW_VAD_ACTIVITY = os.environ.get("ASR_DEBUG", "").lower() in ["1", "true", "yes"]
 
-    # VAD Engine override (set ASR_VAD=silero to use Silero instead of WebRTC)
+    # VAD Engine (using Silero VAD only)
     VAD_ENGINE_OVERRIDE = os.environ.get("ASR_VAD", "").lower()
 
     # Whisper settings
@@ -131,48 +116,16 @@ class AudioBuffer:
         if VAD_ENGINE == "silero":
             self.silero_buffer = []
             self.silero_buffer_duration = 1.0  # Seconds of audio to accumulate for VAD
-        elif VAD_ENGINE == "webrtc":
-            # WebRTC VAD smoothing - track recent VAD decisions
-            self.webrtc_history = []
-            self.webrtc_history_size = 5  # Keep last N VAD decisions
-            self.webrtc_speech_threshold = 0.6  # 60% of recent frames must be speech
+        # WebRTC VAD removed - using Silero VAD only
 
     def _init_vad(self):
-        """Initialize the VAD engine based on what's available."""
-        if VAD_ENGINE == "webrtc":
-            return webrtcvad.Vad(Config.VAD_AGGRESSIVENESS)
-        elif VAD_ENGINE == "silero":
+        """Initialize the VAD engine (Silero VAD only)."""
+        if VAD_ENGINE == "silero":
             return load_silero_vad()
         else:
             raise RuntimeError("No VAD engine available")
 
-    def _detect_speech_webrtc(self, audio_chunk: np.ndarray) -> bool:
-        """Detect speech using WebRTC VAD with smoothing."""
-        # Convert float32 to int16 for WebRTC VAD
-        audio_int16 = (audio_chunk * 32767).astype(np.int16).tobytes()
-
-        # WebRTC VAD expects specific frame sizes
-        frame_size = int(Config.VAD_FRAME_DURATION_MS * self.sample_rate / 1000)
-
-        if len(audio_int16) < frame_size * 2:  # *2 for bytes
-            return False
-
-        # Take the first complete frame
-        frame = audio_int16[: frame_size * 2]
-        is_speech_frame = self.vad.is_speech(frame, self.sample_rate)
-
-        # Add to history for smoothing
-        self.webrtc_history.append(is_speech_frame)
-        if len(self.webrtc_history) > self.webrtc_history_size:
-            self.webrtc_history.pop(0)
-
-        # Smooth decision: require threshold percentage of recent frames to be speech
-        if len(self.webrtc_history) >= 3:  # Need at least 3 frames
-            speech_ratio = sum(self.webrtc_history) / len(self.webrtc_history)
-            return speech_ratio >= self.webrtc_speech_threshold
-
-        # Not enough history yet, use raw decision
-        return is_speech_frame
+    # WebRTC VAD detection method removed - using Silero VAD only
 
     def _detect_speech_silero(self, audio_chunk: np.ndarray) -> bool:
         """Detect speech using Silero VAD."""
@@ -205,9 +158,7 @@ class AudioBuffer:
             # Calculate audio level for debugging
             audio_level = np.sqrt(np.mean(audio_chunk**2))
 
-            if VAD_ENGINE == "webrtc":
-                is_speech = self._detect_speech_webrtc(audio_chunk)
-            elif VAD_ENGINE == "silero":
+            if VAD_ENGINE == "silero":
                 is_speech = self._detect_speech_silero(audio_chunk)
             else:
                 return False
@@ -303,8 +254,7 @@ class AudioBuffer:
         # Reset VAD engine specific buffers
         if VAD_ENGINE == "silero" and hasattr(self, "silero_buffer"):
             self.silero_buffer = []
-        elif VAD_ENGINE == "webrtc" and hasattr(self, "webrtc_history"):
-            self.webrtc_history = []
+        # WebRTC VAD cleanup removed - using Silero VAD only
 
 
 class WhisperTranscriber:
@@ -564,12 +514,8 @@ class ASRService:
         else:
             print("💡 Tip: Set ASR_DEBUG=1 to see VAD activity")
 
-        # VAD switching info
-        if VAD_ENGINE == "silero":
-            print("🧠 Using Silero VAD (ML-based)")
-        else:
-            print("⚡ Using WebRTC VAD (lightweight)")
-            print("💡 Tip: Set ASR_VAD=silero to use Silero VAD instead")
+        # VAD info
+        print("🧠 Using Silero VAD (ML-based)")
         print()
 
         logging.info("Starting ASR Service...")
@@ -585,75 +531,38 @@ class ASRService:
 
         # Start audio capture
         try:
-            if sd is not None:
-                # Use sounddevice
-                print("🎧 Initializing audio capture (sounddevice)...")
+            print("🎧 Initializing audio capture (sounddevice)...")
 
-                # List available audio devices
-                devices = sd.query_devices()
-                input_devices = [d for d in devices if d["max_input_channels"] > 0]
-                if input_devices:
-                    default_device = sd.default.device[0]
-                    device_info = sd.query_devices(default_device)
-                    print(f"🎙️  Using audio device: {device_info['name']}")
-                else:
-                    print("⚠️  No audio input devices found!")
-
-                with sd.InputStream(
-                    samplerate=Config.SAMPLE_RATE,
-                    channels=Config.CHANNELS,
-                    dtype=Config.DTYPE,
-                    blocksize=Config.CHUNK_SIZE,
-                    callback=self._audio_callback,
-                ):
-                    print("✅ Audio capture started successfully!")
-                    print("🗣️  Listening for speech... (Ctrl+C to stop)")
-                    print("💡 Speak into your microphone to test transcription")
-                    print()
-
-                    logging.info("Audio capture started (sounddevice)")
-                    while self.running:
-                        time.sleep(0.1)
+            # List available audio devices
+            devices = sd.query_devices()
+            input_devices = [d for d in devices if d["max_input_channels"] > 0]
+            if input_devices:
+                default_device = sd.default.device[0]
+                device_info = sd.query_devices(default_device)
+                print(f"🎙️  Using audio device: {device_info['name']}")
             else:
-                # Use pyaudio fallback
-                print("🎧 Using PyAudio fallback...")
-                self._run_with_pyaudio()
+                print("⚠️  No audio input devices found!")
+
+            with sd.InputStream(
+                samplerate=Config.SAMPLE_RATE,
+                channels=Config.CHANNELS,
+                dtype=Config.DTYPE,
+                blocksize=Config.CHUNK_SIZE,
+                callback=self._audio_callback,
+            ):
+                print("✅ Audio capture started successfully!")
+                print("🗣️  Listening for speech... (Ctrl+C to stop)")
+                print("💡 Speak into your microphone to test transcription")
+                print()
+
+                logging.info("Audio capture started (sounddevice)")
+                while self.running:
+                    time.sleep(0.1)
 
         except Exception as e:
             logging.error(f"Audio capture failed: {e}")
             self.running = False
 
-    def _run_with_pyaudio(self):
-        """Fallback audio capture using pyaudio."""
-
-        p = pyaudio.PyAudio()
-
-        try:
-            stream = p.open(
-                format=pyaudio.paFloat32,
-                channels=Config.CHANNELS,
-                rate=Config.SAMPLE_RATE,
-                input=True,
-                frames_per_buffer=Config.CHUNK_SIZE,
-            )
-
-            logging.info("Audio capture started (pyaudio)")
-
-            while self.running:
-                try:
-                    data = stream.read(Config.CHUNK_SIZE, exception_on_overflow=False)
-                    audio_data = np.frombuffer(data, dtype=np.float32)
-                    timestamp = time.time()
-                    self.audio_queue.put((audio_data, timestamp))
-                except Exception as e:
-                    logging.warning(f"Audio read error: {e}")
-                    time.sleep(0.1)
-
-        finally:
-            if "stream" in locals():
-                stream.stop_stream()
-                stream.close()
-            p.terminate()
 
     def stop(self):
         """Stop the ASR service."""
@@ -671,7 +580,7 @@ def main():
     )
     parser.add_argument(
         "--vad",
-        choices=["silero", "webrtc"],
+        choices=["silero"],
         help="Force specific VAD engine (overrides ASR_VAD env var)",
     )
     parser.add_argument(

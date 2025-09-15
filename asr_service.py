@@ -7,35 +7,36 @@ Continuously captures audio, detects speech with VAD, and transcribes using Whis
 Cross-platform compatible (Windows/Linux) with robust error handling.
 """
 
-import os
-import sys
-import time
 import logging
-import threading
+import os
 import queue
 import signal
+import sys
+import threading
+import time
 import warnings
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
-import numpy as np
+
 import jsonlines
+import numpy as np
 
 # Suppress the pkg_resources deprecation warning from webrtcvad
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
+
+from faster_whisper import WhisperModel  #noqa: E402
 
 # Audio and ML imports
 try:
     import sounddevice as sd
 except ImportError:
     try:
-        import pyaudio
+        import pyaudio  # noqa: F401 - Used in _run_with_pyaudio method
         sd = None  # Fallback to pyaudio
     except ImportError:
         print("ERROR: Neither sounddevice nor pyaudio found. Install with: pip install sounddevice")
         sys.exit(1)
-
-from faster_whisper import WhisperModel
 
 # VAD imports - try multiple options
 VAD_ENGINE = None
@@ -44,7 +45,7 @@ VAD_ENGINE = None
 if os.environ.get("ASR_VAD", "").lower() == "silero":
     try:
         import torch
-        from silero_vad import load_silero_vad, get_speech_timestamps
+        from silero_vad import get_speech_timestamps, load_silero_vad
         VAD_ENGINE = "silero"
         print("🔧 Using Silero VAD (override)")
     except ImportError:
@@ -58,7 +59,7 @@ else:
     except ImportError:
         try:
             import torch
-            from silero_vad import load_silero_vad, get_speech_timestamps
+            from silero_vad import get_speech_timestamps, load_silero_vad
             VAD_ENGINE = "silero"
             print("🔧 WebRTC VAD not available, using Silero VAD")
         except ImportError:

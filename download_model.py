@@ -4,16 +4,16 @@ Model Download Script for ASR Pipeline
 Downloads and verifies Whisper large-v3-turbo model for local inference.
 """
 
+import logging
 import os
 import sys
-import logging
 import warnings
 from pathlib import Path
 
+from faster_whisper import WhisperModel
+
 # Suppress the pkg_resources deprecation warning from webrtcvad
 warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
-
-from faster_whisper import WhisperModel
 
 # Setup logging
 logging.basicConfig(
@@ -37,7 +37,6 @@ def setup_directories():
 def download_whisper_model(models_dir):
     """Download Whisper large-v3-turbo model."""
     model_name = "large-v3-turbo"
-    model_path = models_dir / model_name
     
     try:
         logger.info(f"Downloading Whisper {model_name} model...")

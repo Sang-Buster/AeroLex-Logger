@@ -4,13 +4,14 @@ Audio Debug Script for ASR Pipeline
 Helps diagnose audio input and VAD issues, especially with Bluetooth devices.
 """
 
-import sys
 import time
+
 import numpy as np
 import sounddevice as sd
-import webrtcvad
-from silero_vad import load_silero_vad, get_speech_timestamps
 import torch
+import webrtcvad
+from silero_vad import get_speech_timestamps, load_silero_vad
+
 
 def list_audio_devices():
     """List all available audio devices."""
@@ -125,7 +126,7 @@ def test_vad_engines(audio_data):
                 if is_speech:
                     speech_frames += 1
                 total_frames += 1
-            except Exception as e:
+            except Exception:
                 pass  # Skip problematic frames
         
         if total_frames > 0:

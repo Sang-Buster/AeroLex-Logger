@@ -4,9 +4,10 @@ ASR Pipeline Installation Test Script
 Verifies all dependencies and components are working correctly.
 """
 
-import sys
 import importlib
+import sys
 from pathlib import Path
+
 
 def test_python_version():
     """Test Python version compatibility."""
@@ -206,14 +207,13 @@ def test_vad_engines():
             if package == 'webrtcvad':
                 import webrtcvad
                 # Test basic functionality
-                vad = webrtcvad.Vad(3)
+                webrtcvad.Vad(3)  # Just test creation
                 print(f"✓ {name} is working")
                 available_engines.append(name)
             elif package == 'silero_vad':
-                import torch
-                from silero_vad import load_silero_vad, get_speech_timestamps
+                from silero_vad import load_silero_vad
                 # Test basic functionality
-                model = load_silero_vad()
+                load_silero_vad()  # Just test loading
                 print(f"✓ {name} is working")
                 available_engines.append(name)
         except ImportError:

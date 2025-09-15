@@ -1,0 +1,22 @@
+[project]
+name = "aerolex-logger"
+version = "0.1.0"
+description = "Aerolex Logger: A local peech recognition service for flight training and aviation communication."
+authors = [{ name = "Sang Buster", email = "hello@singsongaftermath.com" }]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "faster-whisper>=1.2.0",
+    "jsonlines>=4.0.0",
+    "numpy>=2.2.6",
+    "pyaudio>=0.2.14",
+    "silero-vad>=6.0.0",
+    "sounddevice>=0.5.2",
+    "webrtcvad>=2.0.10",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "ruff>=0.11.0",
+    "pre-commit>=4.0.0",
+]

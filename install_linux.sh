@@ -31,8 +31,8 @@ if [[ ! -f "$ASR_DIR/asr_service.py" ]]; then
     exit 1
 fi
 
-if [[ ! -f "$ASR_DIR/requirements.txt" ]]; then
-    echo "ERROR: requirements.txt not found in $ASR_DIR"
+if [[ ! -f "$ASR_DIR/pyproject.toml" ]]; then
+    echo "ERROR: pyproject.toml not found in $ASR_DIR"
     exit 1
 fi
 
@@ -75,6 +75,7 @@ fi
 echo "Setting up directories..."
 sudo mkdir -p /opt/asr/logs
 sudo mkdir -p /opt/asr/models
+sudo mkdir -p /opt/asr/audios
 
 # Copy files
 echo "Copying ASR pipeline files..."
@@ -82,21 +83,17 @@ sudo cp -r "$ASR_DIR"/* /opt/asr/
 sudo chown -R asr:asr /opt/asr
 echo "✓ Files copied to /opt/asr"
 
-# Create virtual environment with uv
-echo "Creating Python virtual environment with uv..."
-sudo -u asr uv venv /opt/asr/venv -p 3.10
-echo "✓ Virtual environment created"
-
-# Install dependencies
-echo "Installing Python dependencies with uv..."
+# Sync dependencies with uv (using pyproject.toml)
+echo "Syncing Python dependencies with uv..."
 echo "This may take several minutes..."
-sudo -u asr uv pip install -r /opt/asr/requirements.txt --python /opt/asr/venv/bin/python
-echo "✓ Dependencies installed"
+cd /opt/asr
+sudo -u asr uv sync --python 3.10
+echo "✓ Dependencies synced and virtual environment created"
 
 # Download Whisper model
 echo "Downloading Whisper model..."
 echo "This may take several minutes depending on internet connection..."
-sudo -u asr /opt/asr/venv/bin/python /opt/asr/download_model.py
+sudo -u asr uv run /opt/asr/download_model.py
 if [[ $? -eq 0 ]]; then
     echo "✓ Whisper model downloaded and verified"
 else
@@ -105,7 +102,7 @@ fi
 
 # Run installation test
 echo "Running installation test..."
-sudo -u asr /opt/asr/venv/bin/python /opt/asr/test_installation.py
+sudo -u asr uv run /opt/asr/test_installation.py
 if [[ $? -eq 0 ]]; then
     echo "✓ Installation test passed"
 else
@@ -161,6 +158,16 @@ sudo tee /etc/logrotate.d/asr > /dev/null << 'EOF'
     create 644 asr asr
     copytruncate
 }
+
+/opt/asr/audios/*.wav {
+    weekly
+    rotate 12
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 644 asr asr
+}
 EOF
 echo "✓ Log rotation configured"
 
@@ -192,6 +199,7 @@ echo "Log Files:"
 echo "  Service: /opt/asr/logs/asr.out"
 echo "  Errors:  /opt/asr/logs/asr.err"
 echo "  Results: /opt/asr/logs/asr_results.jsonl"
+echo "  Audio:   /opt/asr/audios/"
 echo ""
 echo "To view live transcriptions:"
 echo "  tail -f /opt/asr/logs/asr_results.jsonl | jq '.transcript'"

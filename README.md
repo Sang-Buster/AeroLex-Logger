@@ -5,7 +5,7 @@ A robust, cross-platform automatic speech recognition (ASR) pipeline designed fo
 ## 🎯 Features
 
 - **Local Processing**: No cloud API calls - everything runs locally
-- **Real-time VAD**: Voice Activity Detection using WebRTC VAD or Silero VAD
+- **Real-time VAD**: Voice Activity Detection using Silero VAD or WebRTC VAD
 - **GPU Acceleration**: Whisper large-v3-turbo with CUDA support on RTX 3090
 - **Cross-Platform**: Works on both Windows and Linux
 - **Persistent Service**: Auto-start and auto-restart capabilities
@@ -16,10 +16,10 @@ A robust, cross-platform automatic speech recognition (ASR) pipeline designed fo
 ## 🏗️ Architecture
 
 ```
-Microphone → Audio Buffer → VAD Engine → Whisper large-v3-turbo → JSON Logs
+Microphone → Audio Buffer → VAD Engine → Whisper large-v3-turbo → JSON Logs + Audio Files
      ↓            ↓             ↓              ↓                    ↓
-  16kHz Mono   Real-time    Speech/Silence   GPU Inference    Structured Output
-                           (WebRTC/Silero)
+  16kHz Mono   Real-time    Speech/Silence   GPU Inference    Structured Output + WAV
+                           (Silero/WebRTC)
 ```
 
 ## 📁 Project Structure
@@ -28,14 +28,15 @@ Microphone → Audio Buffer → VAD Engine → Whisper large-v3-turbo → JSON L
 asr-pipeline/
 ├── asr_service.py          # Main service script
 ├── download_model.py       # Model download and verification
-├── requirements.txt        # Python dependencies
+├── pyproject.toml         # Python project configuration and dependencies
 ├── asr.service            # Linux systemd unit file
 ├── install_service.bat    # Windows service installer
 ├── README.md              # This file
-└── logs/                  # Log output directory
-    ├── asr_results.jsonl  # Transcription results
-    ├── asr.out           # Service stdout logs
-    └── asr.err           # Service error logs
+├── logs/                  # Log output directory
+│   ├── asr_results.jsonl  # Transcription results
+│   ├── asr.out           # Service stdout logs
+│   └── asr.err           # Service error logs
+└── audios/               # Saved audio segments (WAV files)
 ```
 
 ## 🚀 Quick Start
@@ -46,6 +47,7 @@ asr-pipeline/
 - **OS**: Windows 10/11 or Linux (Ubuntu 20.04+ recommended)
 - **Python**: 3.10 (automatically managed by uv)
 - **Package Manager**: uv (automatically installed by setup scripts)
+- **Project Management**: Uses `pyproject.toml` for modern Python dependency management
 - **CUDA**: 11.8 or newer (for GPU acceleration)
 - **Audio**: Working microphone input
 
@@ -58,9 +60,9 @@ cd asr-pipeline
 # Install uv (if not already installed)
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# Create virtual environment and install dependencies
-uv venv -p 3.10
-uv pip install -r requirements.txt
+# Sync dependencies and create virtual environment (uses pyproject.toml)
+# This automatically creates a virtual environment and installs all dependencies
+uv sync --python 3.10
 
 # Download and verify Whisper model
 uv run download_model.py
@@ -78,8 +80,8 @@ uv run asr_service.py
 # Or with debug mode to see VAD activity
 ASR_DEBUG=1 uv run asr_service.py
 
-# Or switch to Silero VAD
-ASR_VAD=silero ASR_DEBUG=1 uv run asr_service.py
+# Or switch to WebRTC VAD (lighter but less robust)
+ASR_VAD=webrtc ASR_DEBUG=1 uv run asr_service.py
 ```
 
 The service should start capturing audio and display VAD engine information. Speak into your microphone and check `logs/asr_results.jsonl` for transcription results.
@@ -100,8 +102,8 @@ sudo chown -R asr:asr /opt/asr
 
 # Install uv and setup environment
 curl -LsSf https://astral.sh/uv/install.sh | sh
-sudo -u asr uv venv /opt/asr/venv -p 3.10
-sudo -u asr uv pip install -r /opt/asr/requirements.txt --python /opt/asr/venv/bin/python
+cd /opt/asr
+sudo -u asr uv sync --python 3.10
 
 # Enable and start service
 sudo systemctl daemon-reload
@@ -120,17 +122,18 @@ install_service.bat
 ```
 
 The installer will:
-- Create a scheduled task that runs on user logon
+- Create a system-level scheduled task that runs on user logon
 - Configure automatic restart on failure
 - Set up proper working directory and permissions
+- Run with elevated privileges for hardware access
 
 ## 📊 Output Format
 
 Transcription results are saved to `logs/asr_results.jsonl` in JSON Lines format:
 
 ```json
-{"start": 12.4, "end": 16.8, "transcript": "Tower Cessna 123 ready for takeoff", "confidence": 0.91, "timestamp": "2025-09-15T10:30:45.123456", "vad_engine": "webrtc"}
-{"start": 20.1, "end": 23.7, "transcript": "Roger Cessna 123 cleared for takeoff runway 07", "confidence": 0.94, "timestamp": "2025-09-15T10:30:48.789012", "vad_engine": "webrtc"}
+{"start": 12.4, "end": 16.8, "transcript": "Tower Cessna 123 ready for takeoff", "confidence": 0.91, "timestamp": "2025-09-15T10:30:45.123456", "vad_engine": "silero", "audio_file": "audios/speech_2025-09-15T10-30-45_123456.wav"}
+{"start": 20.1, "end": 23.7, "transcript": "Roger Cessna 123 cleared for takeoff runway 07", "confidence": 0.94, "timestamp": "2025-09-15T10:30:48.789012", "vad_engine": "silero", "audio_file": "audios/speech_2025-09-15T10-30-48_789012.wav"}
 ```
 
 ### Fields
@@ -140,7 +143,8 @@ Transcription results are saved to `logs/asr_results.jsonl` in JSON Lines format
 - `transcript`: Transcribed text
 - `confidence`: Confidence score (0.0-1.0, higher is better)
 - `timestamp`: ISO format timestamp when transcription completed
-- `vad_engine`: VAD engine used (webrtc or silero)
+- `vad_engine`: VAD engine used (silero or webrtc)
+- `audio_file`: Path to saved WAV file containing the audio segment
 
 ## ⚙️ Configuration
 
@@ -158,24 +162,28 @@ class Config:
     SPEECH_TIMEOUT = 1.0     # Silence duration to end speech segment
     MIN_SPEECH_DURATION = 0.5 # Minimum speech length to process
     OVERLAP_DURATION = 0.3   # Overlap between segments
+    
+    # Audio storage
+    SAVE_AUDIO_SEGMENTS = True  # Set to False to disable audio saving
+    AUDIO_DIR = "audios"        # Directory for saved audio files
 ```
 
 ### VAD Engine Selection
 
-The service uses WebRTC VAD by default. To switch to Silero VAD:
+The service uses Silero VAD by default. To switch to WebRTC VAD:
 
 ```bash
-# Use Silero VAD instead of WebRTC
-ASR_VAD=silero uv run asr_service.py
+# Use WebRTC VAD instead of Silero
+ASR_VAD=webrtc uv run asr_service.py
 
 # Or set as environment variable
-export ASR_VAD=silero
+export ASR_VAD=webrtc
 uv run asr_service.py
 ```
 
 **VAD Engine Comparison:**
+- **Silero VAD**: ML-based, better for noisy environments, more robust (default)
 - **WebRTC VAD**: Lightweight, fast, good for clear audio
-- **Silero VAD**: ML-based, better for noisy environments, slightly slower
 
 ### GPU Settings
 
@@ -209,12 +217,12 @@ python -c "import torch; print(torch.cuda.is_available())"
 
 #### VAD Engine Not Found
 The service tries multiple VAD engines in order:
-1. WebRTC VAD (preferred, lightweight and reliable)
-2. Silero VAD (ML-based fallback)
+1. Silero VAD (preferred, ML-based and robust)
+2. WebRTC VAD (lightweight fallback)
 
 Install VAD engines:
 ```bash
-pip install webrtcvad silero-vad
+pip install silero-vad webrtcvad
 ```
 
 #### Service Won't Start
@@ -272,11 +280,12 @@ For higher throughput, consider adjusting:
    sudo cp -r asr-pipeline /opt/asr
    sudo chown -R asr:asr /opt/asr
    
-   # Install dependencies
-   sudo -u asr /opt/asr/venv/bin/pip install -r /opt/asr/requirements.txt
+   # Sync dependencies
+   cd /opt/asr
+   sudo -u asr uv sync --python 3.10
    
    # Download model
-   sudo -u asr /opt/asr/venv/bin/python /opt/asr/download_model.py
+   sudo -u asr uv run /opt/asr/download_model.py
    
    # Install service
    sudo cp /opt/asr/asr.service /etc/systemd/system/

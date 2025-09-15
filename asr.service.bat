@@ -25,7 +25,7 @@ REM Check if uv is available, install if not
 uv --version >nul 2>&1
 if %errorlevel% neq 0 (
     echo Installing uv...
-    powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+    powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
     
     REM Refresh PATH
     call refreshenv >nul 2>&1
@@ -54,31 +54,33 @@ if not exist "%ASR_DIR%\asr_service.py" (
     exit /b 1
 )
 
-REM Create logs directory
+REM Create logs and audios directories
 if not exist "%ASR_DIR%\logs" mkdir "%ASR_DIR%\logs"
+if not exist "%ASR_DIR%\audios" mkdir "%ASR_DIR%\audios"
 
-REM Install dependencies with uv
-echo Installing Python dependencies with uv...
+REM Sync dependencies with uv (using pyproject.toml)
+echo Syncing Python dependencies with uv...
 echo This may take several minutes...
-uv pip install -r "%ASR_DIR%\requirements.txt" --python 3.10
+cd /d "%ASR_DIR%"
+uv sync --python 3.10
 if %errorlevel% neq 0 (
-    echo ERROR: Failed to install dependencies
+    echo ERROR: Failed to sync dependencies
     pause
     exit /b 1
 )
-echo Dependencies installed successfully
+echo Dependencies synced successfully
 
 REM Download Whisper model
 echo Downloading Whisper model...
 echo This may take several minutes depending on internet connection...
-uv run --python 3.10 "%ASR_DIR%\download_model.py"
+uv run "%ASR_DIR%\download_model.py"
 if %errorlevel% neq 0 (
     echo WARNING: Model download may have failed
 )
 
 REM Run installation test
 echo Running installation test...
-uv run --python 3.10 "%ASR_DIR%\test_installation.py"
+uv run "%ASR_DIR%\test_installation.py"
 if %errorlevel% neq 0 (
     echo WARNING: Installation test had issues
 )
@@ -89,8 +91,8 @@ echo Creating Windows Task Scheduler entry...
 REM Delete existing task if it exists
 schtasks /delete /tn "ASR_Pipeline" /f >nul 2>&1
 
-REM Create the scheduled task with uv
-schtasks /create /tn "ASR_Pipeline" /tr "uv run --python 3.10 \"%ASR_DIR%\asr_service.py\"" /sc onlogon /ru "SYSTEM" /rl highest /f
+REM Create the scheduled task with uv (system-level)
+schtasks /create /tn "ASR_Pipeline" /tr "uv run \"%ASR_DIR%\asr_service.py\"" /sc onlogon /ru "SYSTEM" /rl highest /f
 
 if %errorlevel% neq 0 (
     echo ERROR: Failed to create scheduled task
@@ -104,7 +106,7 @@ echo Configuring automatic restart on failure...
 REM Export the task to XML for modification
 schtasks /query /tn "ASR_Pipeline" /xml > "%TEMP%\asr_task.xml"
 
-REM Create a modified XML with restart settings
+REM Create a modified XML with restart settings (system-level)
 (
 echo ^<?xml version="1.0" encoding="UTF-16"?^>
 echo ^<Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task"^>
@@ -150,7 +152,7 @@ echo   ^</Settings^>
 echo   ^<Actions Context="Author"^>
 echo     ^<Exec^>
 echo       ^<Command^>uv^</Command^>
-echo       ^<Arguments^>run --python 3.10 "%ASR_DIR%\asr_service.py"^</Arguments^>
+echo       ^<Arguments^>run "%ASR_DIR%\asr_service.py"^</Arguments^>
 echo       ^<WorkingDirectory^>%ASR_DIR%^</WorkingDirectory^>
 echo     ^</Exec^>
 echo   ^</Actions^>

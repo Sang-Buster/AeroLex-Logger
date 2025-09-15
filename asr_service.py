@@ -14,6 +14,7 @@ import signal
 import sys
 import threading
 import time
+import warnings
 import wave
 from datetime import datetime
 from pathlib import Path
@@ -21,8 +22,9 @@ from typing import Optional, Tuple
 
 import jsonlines
 import numpy as np
-
 from faster_whisper import WhisperModel  # noqa: E402
+
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 # Audio and ML imports
 try:

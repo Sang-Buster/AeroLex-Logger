@@ -5,12 +5,15 @@ Helps diagnose audio input and VAD issues, especially with Bluetooth devices.
 """
 
 import time
+import warnings
 
 import numpy as np
 import sounddevice as sd
 import torch
 import webrtcvad
 from silero_vad import get_speech_timestamps, load_silero_vad
+
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 
 def list_audio_devices():

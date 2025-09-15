@@ -6,7 +6,10 @@ Verifies all dependencies and components are working correctly.
 
 import importlib
 import sys
+import warnings
 from pathlib import Path
+
+warnings.filterwarnings("ignore", message="pkg_resources is deprecated")
 
 
 def test_python_version():

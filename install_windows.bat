@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 REM ASR Pipeline Windows Installation Script
 REM This script performs one-time setup of the ASR service
 REM Run this script ONCE to install and configure everything
@@ -53,30 +54,37 @@ REM Create logs and audios directories
 if not exist "%ASR_DIR%\logs" mkdir "%ASR_DIR%\logs"
 if not exist "%ASR_DIR%\audios" mkdir "%ASR_DIR%\audios"
 
-REM Clean up any locked virtual environment
+REM Check for existing virtual environment
 if exist "%ASR_DIR%\.venv" (
-    echo Cleaning up existing virtual environment...
-    REM Kill any Python processes that might be locking files
-    taskkill /f /im python.exe >nul 2>&1
-    taskkill /f /im uv.exe >nul 2>&1
-    
-    REM Wait a moment for processes to terminate
-    timeout /t 3 /nobreak >nul
-    
-    REM Try to remove with PowerShell first (more reliable)
-    powershell -Command "Remove-Item -Path '%ASR_DIR%\.venv' -Recurse -Force -ErrorAction SilentlyContinue" >nul 2>&1
-    
-    REM If still exists, try with rmdir
-    if exist "%ASR_DIR%\.venv" (
-        rmdir /s /q "%ASR_DIR%\.venv" >nul 2>&1
-    )
-    
-    REM Final check - if still exists, force with PowerShell
-    if exist "%ASR_DIR%\.venv" (
-        echo WARNING: Could not remove existing .venv directory
-        echo This may cause issues. Please manually delete .venv and run again.
-        pause
-        exit /b 1
+    echo Found existing virtual environment at %ASR_DIR%\.venv
+    set /p cleanup_venv="Do you want to clean up the existing .venv? (y/n): "
+    if /i "!cleanup_venv!"=="y" (
+        echo Cleaning up existing virtual environment...
+        REM Kill any Python processes that might be locking files
+        taskkill /f /im python.exe >nul 2>&1
+        taskkill /f /im uv.exe >nul 2>&1
+        
+        REM Wait a moment for processes to terminate
+        timeout /t 3 /nobreak >nul
+        
+        REM Try to remove with PowerShell first (more reliable)
+        powershell -Command "Remove-Item -Path '%ASR_DIR%\.venv' -Recurse -Force -ErrorAction SilentlyContinue" >nul 2>&1
+        
+        REM If still exists, try with rmdir
+        if exist "%ASR_DIR%\.venv" (
+            rmdir /s /q "%ASR_DIR%\.venv" >nul 2>&1
+        )
+        
+        REM Final check - if still exists, force with PowerShell
+        if exist "%ASR_DIR%\.venv" (
+            echo WARNING: Could not remove existing .venv directory
+            echo This may cause issues. Please manually delete .venv and run again.
+            pause
+            exit /b 1
+        )
+        echo Virtual environment cleaned up successfully.
+    ) else (
+        echo Keeping existing virtual environment. uv sync will update it if needed.
     )
 )
 
@@ -102,7 +110,8 @@ echo Dependencies installed successfully
 REM Download Whisper model
 echo Downloading Whisper model...
 echo This may take several minutes depending on internet connection...
-uv run "%ASR_DIR%\src\download_model.py"
+cd /d "%ASR_DIR%"
+uv run src\download_model.py
 if %errorlevel% neq 0 (
     echo WARNING: Model download may have failed
     echo The service may not work properly without the model
@@ -110,7 +119,8 @@ if %errorlevel% neq 0 (
 
 REM Run installation test
 echo Running installation test...
-uv run "%ASR_DIR%\src\test_installation.py"
+cd /d "%ASR_DIR%"
+uv run src\test_installation.py
 if %errorlevel% neq 0 (
     echo WARNING: Installation test had issues
     echo Please check the logs for more information
@@ -120,10 +130,10 @@ echo.
 echo Creating Windows Task Scheduler entry...
 
 REM Delete existing task if it exists
-schtasks /delete /tn "ASR_Pipeline" /f >nul 2>&1
+%SystemRoot%\System32\schtasks.exe /delete /tn "ASR_Pipeline" /f >nul 2>&1
 
 REM Create the scheduled task with uv (system-level)
-schtasks /create /tn "ASR_Pipeline" /tr "cmd /c \"cd /d \"%ASR_DIR%\" && \"%ASR_DIR%\asr.service.bat\"\"" /sc onlogon /ru "SYSTEM" /rl highest /f
+%SystemRoot%\System32\schtasks.exe /create /tn "ASR_Pipeline" /tr "\"%ASR_DIR%\asr.service.bat\"" /sc onlogon /ru "SYSTEM" /rl highest /f
 
 if %errorlevel% neq 0 (
     echo ERROR: Failed to create scheduled task
@@ -135,7 +145,7 @@ REM Configure the task for automatic restart on failure
 echo Configuring automatic restart on failure...
 
 REM Export the task to XML for modification
-schtasks /query /tn "ASR_Pipeline" /xml > "%TEMP%\asr_task.xml"
+%SystemRoot%\System32\schtasks.exe /query /tn "ASR_Pipeline" /xml > "%TEMP%\asr_task.xml"
 
 REM Create a modified XML with restart settings (system-level)
 (
@@ -183,7 +193,7 @@ echo   ^</Settings^>
 echo   ^<Actions Context="Author"^>
 echo     ^<Exec^>
 echo       ^<Command^>cmd^</Command^>
-echo       ^<Arguments^>/c "cd /d \"%ASR_DIR%\" && \"%ASR_DIR%\asr.service.bat\""^</Arguments^>
+echo       ^<Arguments^>/c "\"%ASR_DIR%\asr.service.bat\""^</Arguments^>
 echo       ^<WorkingDirectory^>%ASR_DIR%^</WorkingDirectory^>
 echo     ^</Exec^>
 echo   ^</Actions^>
@@ -191,8 +201,8 @@ echo ^</Task^>
 ) > "%TEMP%\asr_task_modified.xml"
 
 REM Import the modified task
-schtasks /delete /tn "ASR_Pipeline" /f >nul 2>&1
-schtasks /create /tn "ASR_Pipeline" /xml "%TEMP%\asr_task_modified.xml" /f
+%SystemRoot%\System32\schtasks.exe /delete /tn "ASR_Pipeline" /f >nul 2>&1
+%SystemRoot%\System32\schtasks.exe /create /tn "ASR_Pipeline" /xml "%TEMP%\asr_task_modified.xml" /f
 
 if %errorlevel% neq 0 (
     echo WARNING: Failed to configure automatic restart. Task created with basic settings.
@@ -213,13 +223,13 @@ echo - Restart automatically if it crashes
 echo - Run with elevated privileges for hardware access
 echo.
 echo Management commands:
-echo - Start service:  schtasks /run /tn "ASR_Pipeline"
+echo - Start service:  %SystemRoot%\System32\schtasks.exe /run /tn "ASR_Pipeline"
 echo - Stop service:   taskkill /f /im python.exe
-echo - Remove service: schtasks /delete /tn "ASR_Pipeline" /f
+echo - Remove service: %SystemRoot%\System32\schtasks.exe /delete /tn "ASR_Pipeline" /f
 echo - View logs:      type "%ASR_DIR%\logs\asr.out"
 echo.
 echo The service will start automatically on next logon.
-echo To start it now, run: schtasks /run /tn "ASR_Pipeline"
+echo To start it now, run: %SystemRoot%\System32\schtasks.exe /run /tn "ASR_Pipeline"
 echo.
 echo NOTE: You only need to run this installation script once.
 echo Use asr.service.bat to manually start/stop the service if needed.
@@ -229,7 +239,7 @@ REM Ask if user wants to start now
 set /p start_now="Start the service now? (y/n): "
 if /i "%start_now%"=="y" (
     echo Starting ASR Pipeline service...
-    schtasks /run /tn "ASR_Pipeline"
+    %SystemRoot%\System32\schtasks.exe /run /tn "ASR_Pipeline"
     echo Service started. Check logs in %ASR_DIR%\logs\ for status.
 )
 

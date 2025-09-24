@@ -140,6 +140,7 @@ def main():
     if download_whisper_model(models_dir):
         logger.info("✓ Model setup completed successfully!")
         logger.info("You can now run: python asr_service.py")
+        sys.exit(0)
     else:
         logger.error("✗ Model setup failed!")
         sys.exit(1)

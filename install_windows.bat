@@ -66,14 +66,22 @@ if exist "%ASR_DIR%\.venv" (
     taskkill /f /im uv.exe >nul 2>&1
     
     REM Wait a moment for processes to terminate
-    timeout /t 2 /nobreak >nul
+    timeout /t 3 /nobreak >nul
     
-    REM Force remove the .venv directory
-    rmdir /s /q "%ASR_DIR%\.venv" >nul 2>&1
+    REM Try to remove with PowerShell first (more reliable)
+    powershell -Command "Remove-Item -Path '%ASR_DIR%\.venv' -Recurse -Force -ErrorAction SilentlyContinue" >nul 2>&1
     
-    REM If still exists, try with PowerShell
+    REM If still exists, try with rmdir
     if exist "%ASR_DIR%\.venv" (
-        powershell -Command "Remove-Item -Path '%ASR_DIR%\.venv' -Recurse -Force" >nul 2>&1
+        rmdir /s /q "%ASR_DIR%\.venv" >nul 2>&1
+    )
+    
+    REM Final check - if still exists, force with PowerShell
+    if exist "%ASR_DIR%\.venv" (
+        echo WARNING: Could not remove existing .venv directory
+        echo This may cause issues. Please manually delete .venv and run again.
+        pause
+        exit /b 1
     )
 )
 

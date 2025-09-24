@@ -167,6 +167,42 @@ def evaluate_single_pair(reference: str, hypothesis: str) -> Dict:
     }
 
 
+def _filter_ground_truth_lines(lines: List[str]) -> List[str]:
+    """
+    Filter out file header sections from ground truth lines.
+    Removes lines that are:
+    - All dashes (--------------------------------)
+    - File names (typically between dash lines, ending with .mp4, .mov, etc.)
+    - Empty lines
+    """
+    filtered_lines = []
+    in_header_section = False
+    
+    for line in lines:
+        # Skip empty lines
+        if not line:
+            continue
+            
+        # Check if line is all dashes (header boundary)
+        if re.match(r'^-+$', line):
+            in_header_section = not in_header_section
+            continue
+            
+        # If we're in a header section, skip the line
+        if in_header_section:
+            continue
+            
+        # Additional check: skip lines that look like filenames
+        # (contain common video/audio extensions)
+        if re.search(r'\.(mp4|mov|wav|mp3|avi|mkv|flv|m4v)$', line, re.IGNORECASE):
+            continue
+            
+        # Keep this line as it appears to be actual transcript content
+        filtered_lines.append(line)
+    
+    return filtered_lines
+
+
 def load_ground_truth(file_path: str) -> List[str]:
     """Load ground truth from various file formats."""
     path = Path(file_path)
@@ -193,12 +229,12 @@ def load_ground_truth(file_path: str) -> List[str]:
     
     elif path.suffix.lower() == '.txt':
         with open(path, 'r', encoding='utf-8') as f:
-            return [line.strip() for line in f if line.strip()]
+            return _filter_ground_truth_lines([line.strip() for line in f])
     
     else:
         # Try to read as text file
         with open(path, 'r', encoding='utf-8') as f:
-            return [line.strip() for line in f if line.strip()]
+            return _filter_ground_truth_lines([line.strip() for line in f])
 
 
 def load_asr_results(file_path: str) -> List[Dict]:

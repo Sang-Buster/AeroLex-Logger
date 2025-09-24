@@ -10,6 +10,7 @@ dependencies = [
     "hf-xet>=1.1.10",
     "jsonlines>=4.0.0",
     "numpy>=2.2.6",
+    "scipy>=1.10.0",
     "silero-vad>=6.0.0",
     "sounddevice>=0.5.2",
     "torch>=2.0.0",

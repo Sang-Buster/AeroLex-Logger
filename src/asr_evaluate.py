@@ -17,7 +17,8 @@ import re
 import sys
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
+
 import jsonlines
 
 
@@ -375,7 +376,7 @@ def main():
     if args.compare:
         # Direct comparison mode
         ref, hyp = args.compare
-        print(f"📝 Comparing texts directly:")
+        print("📝 Comparing texts directly:")
         print(f"Reference:  '{ref}'")
         print(f"Hypothesis: '{hyp}'")
         print()

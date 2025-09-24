@@ -1,6 +1,6 @@
 #!/bin/bash
 # ASR Pipeline Linux Installation Script
-# Automates the complete setup process for systemd service
+# Installs and runs the service from the current directory (no copying to /opt)
 
 set -e  # Exit on any error
 
@@ -8,26 +8,16 @@ echo "============================================"
 echo "ASR Pipeline Linux Installation"
 echo "============================================"
 
-# Check if running as root
-if [[ $EUID -eq 0 ]]; then
-   echo "ERROR: This script should not be run as root"
-   echo "Run as regular user with sudo access"
-   exit 1
-fi
-
-# Check if sudo is available
-if ! command -v sudo &> /dev/null; then
-    echo "ERROR: sudo is required but not installed"
-    exit 1
-fi
-
-# Get current directory
+# Get current directory and user
 ASR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CURRENT_USER="$(whoami)"
+
 echo "ASR Directory: $ASR_DIR"
+echo "Current User: $CURRENT_USER"
 
 # Check if required files exist
-if [[ ! -f "$ASR_DIR/asr_service.py" ]]; then
-    echo "ERROR: asr_service.py not found in $ASR_DIR"
+if [[ ! -f "$ASR_DIR/src/asr_service.py" ]]; then
+    echo "ERROR: src/asr_service.py not found in $ASR_DIR"
     exit 1
 fi
 
@@ -41,7 +31,7 @@ echo "Checking uv installation..."
 if ! command -v uv &> /dev/null; then
     echo "Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.cargo/bin:$PATH"
+    export PATH="$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
     
     # Check if installation succeeded
     if ! command -v uv &> /dev/null; then
@@ -53,47 +43,24 @@ fi
 
 echo "✓ uv is available"
 
-# Check Python version through uv
-echo "Setting up Python 3.10 environment..."
-if ! uv python list | grep -q "3.10"; then
-    echo "Installing Python 3.10..."
-    uv python install 3.10
-fi
+# Create necessary directories
+echo "Creating directories..."
+mkdir -p "$ASR_DIR/logs"
+mkdir -p "$ASR_DIR/models"
+mkdir -p "$ASR_DIR/audios"
+echo "✓ Directories created"
 
-echo "✓ Python 3.10 is available"
-
-# Create ASR user
-echo "Creating ASR service user..."
-if id "asr" &>/dev/null; then
-    echo "User 'asr' already exists"
-else
-    sudo useradd -r -s /bin/false -d /opt/asr asr
-    echo "✓ Created user 'asr'"
-fi
-
-# Create directories
-echo "Setting up directories..."
-sudo mkdir -p /opt/asr/logs
-sudo mkdir -p /opt/asr/models
-sudo mkdir -p /opt/asr/audios
-
-# Copy files
-echo "Copying ASR pipeline files..."
-sudo cp -r "$ASR_DIR"/* /opt/asr/
-sudo chown -R asr:asr /opt/asr
-echo "✓ Files copied to /opt/asr"
-
-# Sync dependencies with uv (using pyproject.toml)
-echo "Syncing Python dependencies with uv..."
+# Sync dependencies with uv
+echo "Installing dependencies..."
 echo "This may take several minutes..."
-cd /opt/asr
-sudo -u asr uv sync --python 3.10
-echo "✓ Dependencies synced and virtual environment created"
+cd "$ASR_DIR"
+uv sync
+echo "✓ Dependencies installed and virtual environment created"
 
 # Download Whisper model
 echo "Downloading Whisper model..."
 echo "This may take several minutes depending on internet connection..."
-sudo -u asr uv run /opt/asr/download_model.py
+uv run src/download_model.py
 if [[ $? -eq 0 ]]; then
     echo "✓ Whisper model downloaded and verified"
 else
@@ -102,16 +69,55 @@ fi
 
 # Run installation test
 echo "Running installation test..."
-sudo -u asr uv run /opt/asr/test_installation.py
+uv run src/test_installation.py
 if [[ $? -eq 0 ]]; then
     echo "✓ Installation test passed"
 else
     echo "WARNING: Installation test had issues. Check manually."
 fi
 
+# Update asr.service file with current paths
+echo "Creating systemd service file..."
+SERVICE_FILE="$ASR_DIR/asr.service"
+
+cat > "$SERVICE_FILE" << EOF
+[Unit]
+Description=ASR Pipeline Service - Local Speech Recognition
+Documentation=https://github.com/your-repo/asr-pipeline
+After=network.target sound.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=$CURRENT_USER
+Group=$CURRENT_USER
+
+# Working directory
+WorkingDirectory=$ASR_DIR
+ExecStart=$ASR_DIR/.venv/bin/python src/asr_service.py
+
+# Environment variables
+Environment=PYTHONPATH=$ASR_DIR
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=PYTHONUNBUFFERED=1
+
+# Logging
+StandardOutput=append:$ASR_DIR/logs/asr.out
+StandardError=append:$ASR_DIR/logs/asr.err
+
+# Restart policy
+Restart=always
+RestartSec=10
+StartLimitInterval=60
+StartLimitBurst=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 # Install systemd service
 echo "Installing systemd service..."
-sudo cp /opt/asr/asr.service /etc/systemd/system/
+sudo cp "$SERVICE_FILE" /etc/systemd/system/asr.service
 sudo systemctl daemon-reload
 echo "✓ Systemd service installed"
 
@@ -119,6 +125,16 @@ echo "✓ Systemd service installed"
 echo "Enabling ASR service..."
 sudo systemctl enable asr.service
 echo "✓ Service enabled for auto-start"
+
+# Add user to audio group (if needed)
+if groups "$CURRENT_USER" | grep -q audio; then
+    echo "✓ User '$CURRENT_USER' already in audio group"
+else
+    echo "Adding user '$CURRENT_USER' to audio group..."
+    sudo usermod -a -G audio "$CURRENT_USER"
+    echo "✓ Added user '$CURRENT_USER' to audio group"
+    echo "NOTE: You may need to log out and back in for audio group changes to take effect"
+fi
 
 # Test service
 echo "Testing service startup..."
@@ -130,54 +146,6 @@ if sudo systemctl is-active --quiet asr.service; then
 else
     echo "WARNING: Service may not have started properly"
     echo "Check logs with: sudo journalctl -u asr.service -f"
-fi
-
-# Set up log rotation
-echo "Setting up log rotation..."
-sudo tee /etc/logrotate.d/asr > /dev/null << 'EOF'
-/opt/asr/logs/*.log /opt/asr/logs/*.out /opt/asr/logs/*.err {
-    daily
-    rotate 30
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 644 asr asr
-    postrotate
-        systemctl reload asr.service > /dev/null 2>&1 || true
-    endscript
-}
-
-/opt/asr/logs/*.jsonl {
-    daily
-    rotate 90
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 644 asr asr
-    copytruncate
-}
-
-/opt/asr/audios/*.wav {
-    weekly
-    rotate 12
-    compress
-    delaycompress
-    missingok
-    notifempty
-    create 644 asr asr
-}
-EOF
-echo "✓ Log rotation configured"
-
-# Add user to audio group (if needed)
-if groups asr | grep -q audio; then
-    echo "✓ User 'asr' already in audio group"
-else
-    sudo usermod -a -G audio asr
-    echo "✓ Added user 'asr' to audio group"
-    echo "NOTE: Service restart may be required for audio group changes"
 fi
 
 echo ""
@@ -196,19 +164,19 @@ echo "  Status:  sudo systemctl status asr.service"
 echo "  Logs:    sudo journalctl -u asr.service -f"
 echo ""
 echo "Log Files:"
-echo "  Service: /opt/asr/logs/asr.out"
-echo "  Errors:  /opt/asr/logs/asr.err"
-echo "  Results: /opt/asr/logs/asr_results.jsonl"
-echo "  Audio:   /opt/asr/audios/"
+echo "  Service: $ASR_DIR/logs/asr.out"
+echo "  Errors:  $ASR_DIR/logs/asr.err"
+echo "  Results: $ASR_DIR/logs/asr_results.jsonl"
+echo "  Audio:   $ASR_DIR/audios/"
 echo ""
 echo "To view live transcriptions:"
-echo "  tail -f /opt/asr/logs/asr_results.jsonl | jq '.transcript'"
+echo "  tail -f $ASR_DIR/logs/asr_results.jsonl | jq '.transcript'"
 echo ""
 
 # Check if service is running properly
 sleep 2
 if sudo systemctl is-active --quiet asr.service; then
-    echo "✅ ASR Pipeline is running successfully!"
+    echo "✅ ASR Pipeline is running successfully from $ASR_DIR!"
 else
     echo "⚠️  Service may need attention. Check logs for details."
 fi

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 def setup_directories():
     """Create necessary directories for models and logs."""
-    base_dir = Path(__file__).parent
+    base_dir = Path(__file__).parent.parent
     models_dir = base_dir / "models"
     logs_dir = base_dir / "logs"
 
@@ -139,7 +139,7 @@ def main():
     # Download Whisper model
     if download_whisper_model(models_dir):
         logger.info("✓ Model setup completed successfully!")
-        logger.info("You can now run: python asr_service.py")
+        logger.info("You can now run: python src/asr_service.py")
         sys.exit(0)
     else:
         logger.error("✗ Model setup failed!")

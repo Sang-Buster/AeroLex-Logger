@@ -42,14 +42,9 @@ if %errorlevel% neq 0 (
 
 echo uv is available
 
-REM Setup Python 3.10 environment
-echo Setting up Python 3.10 environment...
-uv python install 3.10
-echo Python 3.10 is ready
-
 REM Check if required files exist
-if not exist "%ASR_DIR%\asr_service.py" (
-    echo ERROR: asr_service.py not found in %ASR_DIR%
+if not exist "%ASR_DIR%\src\asr_service.py" (
+    echo ERROR: src\asr_service.py not found in %ASR_DIR%
     pause
     exit /b 1
 )
@@ -89,7 +84,7 @@ REM Install dependencies with uv (using pyproject.toml)
 echo Installing Python dependencies with uv...
 echo This may take several minutes...
 cd /d "%ASR_DIR%"
-uv sync --python 3.10
+uv sync
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install dependencies
     echo This may be due to:
@@ -107,7 +102,7 @@ echo Dependencies installed successfully
 REM Download Whisper model
 echo Downloading Whisper model...
 echo This may take several minutes depending on internet connection...
-uv run "%ASR_DIR%\download_model.py"
+uv run "%ASR_DIR%\src\download_model.py"
 if %errorlevel% neq 0 (
     echo WARNING: Model download may have failed
     echo The service may not work properly without the model
@@ -115,7 +110,7 @@ if %errorlevel% neq 0 (
 
 REM Run installation test
 echo Running installation test...
-uv run "%ASR_DIR%\test_installation.py"
+uv run "%ASR_DIR%\src\test_installation.py"
 if %errorlevel% neq 0 (
     echo WARNING: Installation test had issues
     echo Please check the logs for more information

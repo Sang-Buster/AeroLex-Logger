@@ -18,8 +18,8 @@ if not exist "%ASR_DIR%\.venv" (
 )
 
 REM Check if required files exist
-if not exist "%ASR_DIR%\asr_service.py" (
-    echo ERROR: asr_service.py not found in %ASR_DIR%
+if not exist "%ASR_DIR%\src\asr_service.py" (
+    echo ERROR: src\asr_service.py not found in %ASR_DIR%
     exit /b 1
 )
 
@@ -32,4 +32,4 @@ echo Starting ASR Pipeline service...
 echo Logs will be written to: %ASR_DIR%\logs\
 echo Press Ctrl+C to stop the service
 
-uv run "%ASR_DIR%\asr_service.py"
+uv run "%ASR_DIR%\src\asr_service.py"

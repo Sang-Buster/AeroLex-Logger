@@ -118,7 +118,7 @@ def test_whisper_model():
         from faster_whisper import WhisperModel
 
         # Check if model directory exists
-        models_dir = Path("models")
+        models_dir = Path("../models")
         if models_dir.exists():
             print(f"✓ Models directory exists: {models_dir}")
         else:
@@ -162,7 +162,7 @@ def test_whisper_model():
         print("    - Network connection issues during download")
         print("    - Insufficient disk space")
         print("    - Missing dependencies")
-        print("  Try running: python download_model.py")
+        print("  Try running: python src/download_model.py")
         return False
 
 
@@ -204,19 +204,23 @@ def test_file_structure():
     """Test required files are present."""
     print("\nTesting file structure...")
 
-    base_dir = Path(__file__).parent
-    required_files = [
-        "asr_service.py",
-        "download_model.py",
+    base_dir = Path(__file__).parent.parent
+    src_files = [
+        "src/asr_service.py",
+        "src/download_model.py",
+        "src/test_audio.py",
+        "src/test_installation.py",
+        "src/asr_evaluate.py",
+    ]
+    root_files = [
         "pyproject.toml",
         "README.md",
         "asr.service",
         "asr.service.bat",
         "install_windows.bat",
         "install_linux.sh",
-        "test_audio.py",
-        "test_installation.py",
     ]
+    required_files = src_files + root_files
 
     all_present = True
     for filename in required_files:
@@ -280,7 +284,7 @@ def main():
     if passed == total:
         print("\n🎉 All tests passed! ASR Pipeline is ready to use.")
         print("\nNext steps:")
-        print("1. Run: python asr_service.py (for manual testing)")
+        print("1. Run: python src/asr_service.py (for manual testing)")
         print("2. Linux: ./install_linux.sh (for service installation)")
         print("3. Windows: asr.service.bat (for service installation)")
     else:
@@ -292,7 +296,7 @@ def main():
             print("\n💡 Try: uv add {package}")
 
         if not results.get("Whisper Model", False):
-            print("💡 Try: uv run download_model.py")
+            print("💡 Try: uv run src/download_model.py")
             
         if not results.get("VAD Engine", False):
             print("💡 Try: uv add silero-vad torch")

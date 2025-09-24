@@ -192,7 +192,7 @@ def main():
     print("- If audio levels are very low, check microphone gain/volume")
     print("- For Bluetooth devices, try reconnecting or check codec compatibility")
     print("- Silero VAD works best with clear speech and minimal background noise")
-    print("- Use: ASR_DEBUG=1 uv run asr_service.py to see VAD activity")
+    print("- Use: ASR_DEBUG=1 uv run src/asr_service.py to see VAD activity")
 
 
 if __name__ == "__main__":

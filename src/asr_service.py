@@ -21,7 +21,8 @@ from typing import Optional, Tuple
 
 import jsonlines
 import numpy as np
-from faster_whisper import WhisperModel  # noqa: E402
+from faster_whisper import WhisperModel
+from scipy import signal as scipy_signal
 
 # Audio and ML imports
 try:
@@ -62,10 +63,43 @@ else:
         sys.exit(1)
 
 
+def detect_best_sample_rate(device_id=None):
+    """Detect the best supported sample rate for the audio device."""
+    # Preferred sample rates in order of preference
+    preferred_rates = [48000, 44100, 22050, 16000, 8000]
+    
+    for rate in preferred_rates:
+        try:
+            # Test if this sample rate works with the device
+            with sd.InputStream(
+                samplerate=rate,
+                channels=1,
+                dtype=np.float32,
+                device=device_id,
+                blocksize=512,
+                callback=lambda *args: None  # Dummy callback
+            ):
+                print(f"✓ Using sample rate: {rate} Hz")
+                return rate
+        except Exception:
+            continue
+    
+    # If nothing works, fall back to querying device info
+    try:
+        device_info = sd.query_devices(device_id)
+        default_rate = int(device_info['default_samplerate'])
+        print(f"✓ Using device default sample rate: {default_rate} Hz")
+        return default_rate
+    except Exception:
+        print("⚠️  Could not detect sample rate, using 44100 Hz as fallback")
+        return 44100
+
+
 # Configuration
 class Config:
-    # Audio settings
-    SAMPLE_RATE = 16000
+    # Audio settings - will be set dynamically
+    SAMPLE_RATE = None  # Will be detected at runtime
+    WHISPER_SAMPLE_RATE = 16000  # Whisper expects 16kHz
     CHANNELS = 1
     CHUNK_SIZE = 1024  # Adjustable buffer size
     DTYPE = np.float32
@@ -98,11 +132,24 @@ class Config:
     AUDIO_DIR = "audios"
 
 
+def resample_audio(audio_data: np.ndarray, orig_sr: int, target_sr: int) -> np.ndarray:
+    """Resample audio from original sample rate to target sample rate."""
+    if orig_sr == target_sr:
+        return audio_data
+    
+    # Calculate resampling ratio
+    num_samples = int(len(audio_data) * target_sr / orig_sr)
+    
+    # Use scipy's resample function
+    return scipy_signal.resample(audio_data, num_samples).astype(np.float32)
+
+
 class AudioBuffer:
     """Thread-safe audio buffer with VAD integration."""
 
-    def __init__(self, sample_rate: int = Config.SAMPLE_RATE):
+    def __init__(self, sample_rate: int = 44100):
         self.sample_rate = sample_rate
+        self.whisper_sample_rate = Config.WHISPER_SAMPLE_RATE
         self.buffer = []
         self.is_speech = False
         self.speech_start_time = None
@@ -139,8 +186,15 @@ class AudioBuffer:
         if len(self.silero_buffer) < required_samples:
             return False  # Not enough audio yet, assume no speech
 
-        # Convert to torch tensor and run VAD on accumulated audio
-        audio_tensor = torch.from_numpy(np.array(self.silero_buffer, dtype=np.float32))
+        # Resample for Silero VAD (it expects 16kHz)
+        vad_audio = resample_audio(
+            np.array(self.silero_buffer, dtype=np.float32),
+            self.sample_rate,
+            16000
+        )
+        
+        # Convert to torch tensor and run VAD on resampled audio
+        audio_tensor = torch.from_numpy(vad_audio)
         speech_timestamps = get_speech_timestamps(audio_tensor, self.vad)
 
         # Keep only recent audio in buffer (sliding window)
@@ -219,15 +273,23 @@ class AudioBuffer:
                             print(f"🔴 Speech ended ({speech_duration:.1f}s)")
 
                         if speech_duration >= Config.MIN_SPEECH_DURATION:
-                            # Return the speech segment
+                            # Return the speech segment - resample for Whisper
                             audio_data = np.array(self.buffer, dtype=Config.DTYPE)
+                            
+                            # Resample to Whisper's expected sample rate (16kHz)
+                            whisper_audio = resample_audio(
+                                audio_data, 
+                                self.sample_rate, 
+                                self.whisper_sample_rate
+                            )
+                            
                             start_time = self.speech_start_time
                             end_time = current_time
 
                             # Reset for next segment
                             self._reset()
 
-                            return audio_data, start_time, end_time
+                            return whisper_audio, start_time, end_time
                         else:
                             # Too short, discard
                             if Config.SHOW_VAD_ACTIVITY:
@@ -339,9 +401,16 @@ class WhisperTranscriber:
 class ASRService:
     """Main ASR service orchestrating audio capture, VAD, and transcription."""
 
-    def __init__(self):
+    def __init__(self, audio_device_id=None):
         self.running = False
-        self.audio_buffer = AudioBuffer()
+        self.audio_device_id = audio_device_id
+        
+        # Detect and set the best sample rate for the audio device
+        if Config.SAMPLE_RATE is None:
+            Config.SAMPLE_RATE = detect_best_sample_rate(audio_device_id)
+        
+        # Now initialize components that depend on Config.SAMPLE_RATE
+        self.audio_buffer = AudioBuffer(sample_rate=Config.SAMPLE_RATE)
         self.transcriber = WhisperTranscriber()
         self.audio_queue = queue.Queue()
 
@@ -428,7 +497,7 @@ class ASRService:
                 logging.error(f"Error processing audio: {e}")
 
     def _save_audio_segment(
-        self, audio_data: np.ndarray, timestamp: str
+        self, audio_data: np.ndarray, timestamp: str, sample_rate: int = None
     ) -> Optional[str]:
         """Save audio segment as WAV file."""
         if not Config.SAVE_AUDIO_SEGMENTS:
@@ -441,12 +510,15 @@ class ASRService:
 
             # Convert float32 to int16 for WAV file
             audio_int16 = (audio_data * 32767).astype(np.int16)
+            
+            # Use provided sample rate or default to Whisper sample rate
+            save_sample_rate = sample_rate or Config.WHISPER_SAMPLE_RATE
 
             # Write WAV file
             with wave.open(str(filepath), "wb") as wav_file:
                 wav_file.setnchannels(Config.CHANNELS)
                 wav_file.setsampwidth(2)  # 16-bit = 2 bytes
-                wav_file.setframerate(Config.SAMPLE_RATE)
+                wav_file.setframerate(save_sample_rate)
                 wav_file.writeframes(audio_int16.tobytes())
 
             return str(filepath)
@@ -465,7 +537,8 @@ class ASRService:
             if transcript:  # Only log if we got a transcript
                 # Save audio segment if enabled
                 timestamp_str = datetime.now().isoformat()
-                audio_file = self._save_audio_segment(audio_data, timestamp_str)
+                # Save with Whisper sample rate since audio_data is resampled
+                audio_file = self._save_audio_segment(audio_data, timestamp_str, Config.WHISPER_SAMPLE_RATE)
 
                 # Create log entry
                 log_entry = {
@@ -537,9 +610,9 @@ class ASRService:
             devices = sd.query_devices()
             input_devices = [d for d in devices if d["max_input_channels"] > 0]
             if input_devices:
-                default_device = sd.default.device[0]
-                device_info = sd.query_devices(default_device)
-                print(f"🎙️  Using audio device: {device_info['name']}")
+                device_to_use = self.audio_device_id if self.audio_device_id is not None else sd.default.device[0]
+                device_info = sd.query_devices(device_to_use)
+                print(f"🎙️  Using audio device: {device_info['name']} (Sample Rate: {Config.SAMPLE_RATE} Hz)")
             else:
                 print("⚠️  No audio input devices found!")
 
@@ -548,6 +621,7 @@ class ASRService:
                 channels=Config.CHANNELS,
                 dtype=Config.DTYPE,
                 blocksize=Config.CHUNK_SIZE,
+                device=self.audio_device_id,
                 callback=self._audio_callback,
             ):
                 print("✅ Audio capture started successfully!")
@@ -588,7 +662,29 @@ def main():
         action="store_true",
         help="Enable debug mode (equivalent to ASR_DEBUG=1)",
     )
+    parser.add_argument(
+        "--device",
+        type=int,
+        help="Audio input device ID (use test_audio.py to list devices)",
+    )
+    parser.add_argument(
+        "--list-devices",
+        action="store_true",
+        help="List available audio devices and exit",
+    )
     args = parser.parse_args()
+
+    # List devices if requested
+    if args.list_devices:
+        print("🎧 Available Audio Input Devices:")
+        print("=" * 50)
+        devices = sd.query_devices()
+        for i, device in enumerate(devices):
+            if device["max_input_channels"] > 0:
+                status = "📍 DEFAULT" if i == sd.default.device[0] else "  "
+                print(f"{status} [{i:2d}] {device['name']}")
+                print(f"      Channels: {device['max_input_channels']}, Sample Rate: {device['default_samplerate']}")
+        return
 
     # Override environment variables with command line args
     if args.vad:
@@ -599,6 +695,9 @@ def main():
         os.environ["ASR_DEBUG"] = "1"
         print("🐛 Debug mode enabled")
 
+    if args.device is not None:
+        print(f"🎙️  Audio device set to: {args.device}")
+
     # Create logs directory
     Path("logs").mkdir(exist_ok=True)
 
@@ -607,7 +706,7 @@ def main():
         Path(Config.AUDIO_DIR).mkdir(exist_ok=True)
 
     # Initialize and start service
-    service = ASRService()
+    service = ASRService(audio_device_id=args.device)
 
     try:
         service.start()

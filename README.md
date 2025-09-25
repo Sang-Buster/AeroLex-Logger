@@ -44,6 +44,7 @@ asr-pipeline/
 ├── .gitignore                # Git ignore file
 ├── .pre-commit-config.yaml   # Pre-commit configuration
 ├── .python-version           # Python version
+├── ASR_EVALUATION_METRICS.md       # ASR evaluation metrics documentation
 ├── asr.service                     # Linux systemd unit file
 ├── asr.service.bat                 # Windows service runner
 ├── install_linux.sh                # Linux installation script

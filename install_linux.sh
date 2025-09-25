@@ -76,48 +76,25 @@ else
     echo "WARNING: Installation test had issues. Check manually."
 fi
 
-# Update asr.service file with current paths
-echo "Creating systemd service file..."
+# Process asr.service template with current paths
+echo "Processing systemd service file..."
 SERVICE_FILE="$ASR_DIR/asr.service"
+TEMP_SERVICE_FILE="/tmp/asr.service"
 
-cat > "$SERVICE_FILE" << EOF
-[Unit]
-Description=ASR Pipeline Service - Local Speech Recognition
-Documentation=https://github.com/your-repo/asr-pipeline
-After=network.target sound.service
-Wants=network.target
+if [[ ! -f "$SERVICE_FILE" ]]; then
+    echo "ERROR: asr.service file not found in $ASR_DIR"
+    echo "Please ensure asr.service exists with proper configuration"
+    exit 1
+fi
 
-[Service]
-Type=simple
-User=$CURRENT_USER
-Group=$CURRENT_USER
-
-# Working directory
-WorkingDirectory=$ASR_DIR
-ExecStart=$ASR_DIR/.venv/bin/python src/asr_service.py
-
-# Environment variables
-Environment=PYTHONPATH=$ASR_DIR
-Environment=CUDA_VISIBLE_DEVICES=0
-Environment=PYTHONUNBUFFERED=1
-
-# Logging
-StandardOutput=append:$ASR_DIR/logs/asr.out
-StandardError=append:$ASR_DIR/logs/asr.err
-
-# Restart policy
-Restart=always
-RestartSec=10
-StartLimitInterval=60
-StartLimitBurst=3
-
-[Install]
-WantedBy=multi-user.target
-EOF
+# Replace placeholders with actual paths and user
+sed -e "s|@ASR_DIR@|$ASR_DIR|g" -e "s|@CURRENT_USER@|$CURRENT_USER|g" "$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
+echo "✓ Processed service file with current paths"
 
 # Install systemd service
 echo "Installing systemd service..."
-sudo cp "$SERVICE_FILE" /etc/systemd/system/asr.service
+sudo cp "$TEMP_SERVICE_FILE" /etc/systemd/system/asr.service
+rm "$TEMP_SERVICE_FILE"  # Clean up temp file
 sudo systemctl daemon-reload
 echo "✓ Systemd service installed"
 

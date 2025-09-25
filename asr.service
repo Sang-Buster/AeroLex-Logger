@@ -21,6 +21,9 @@ Environment="CUDA_VISIBLE_DEVICES=0"
 Environment="PYTHONUNBUFFERED=1"
 Environment="PULSE_RUNTIME_PATH=/run/user/@USER_ID@/pulse"
 Environment="XDG_RUNTIME_DIR=/run/user/@USER_ID@"
+Environment="HOME=/home/@CURRENT_USER@"
+Environment="USER=@CURRENT_USER@"
+Environment="DISPLAY=:0"
 
 # Logging (systemd journal only — safer)
 StandardOutput=journal

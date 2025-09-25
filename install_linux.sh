@@ -11,6 +11,7 @@ echo "============================================"
 # Get current directory and user
 ASR_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CURRENT_USER="$(whoami)"
+CURRENT_USER_ID="$(id -u)"
 
 echo "ASR Directory: $ASR_DIR"
 echo "Current User: $CURRENT_USER"
@@ -88,7 +89,7 @@ if [[ ! -f "$SERVICE_FILE" ]]; then
 fi
 
 # Replace placeholders with actual paths and user
-sed -e "s|@ASR_DIR@|$ASR_DIR|g" -e "s|@CURRENT_USER@|$CURRENT_USER|g" "$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
+sed -e "s|@ASR_DIR@|$ASR_DIR|g" -e "s|@CURRENT_USER@|$CURRENT_USER|g" -e "s|@USER_ID@|$CURRENT_USER_ID|g" "$SERVICE_FILE" > "$TEMP_SERVICE_FILE"
 echo "✓ Processed service file with current paths"
 
 # Install systemd service

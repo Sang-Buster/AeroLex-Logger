@@ -158,6 +158,88 @@
   @apply bg-blue-100 text-blue-800;
 }
 
+/* Video card badges row */
+.video-badges-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+/* All badges same exact size and styling */
+.score-badge,
+.status-badge,
+.time-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 90px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-align: center;
+  border: 1px solid;
+  box-sizing: border-box;
+  line-height: 1;
+}
+
+.score-badge-excellent {
+  background-color: #dcfce7;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.score-badge-good {
+  background-color: #dbeafe;
+  color: #1d4ed8;
+  border-color: #bfdbfe;
+}
+
+.score-badge-average {
+  background-color: #fef3c7;
+  color: #a16207;
+  border-color: #fed7aa;
+}
+
+.score-badge-poor {
+  background-color: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.score-badge-none {
+  background-color: #f3f4f6;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.status-badge.bg-green-100 {
+  background-color: #dcfce7 !important;
+  color: #15803d !important;
+  border-color: #bbf7d0 !important;
+}
+
+.status-badge.bg-blue-100 {
+  background-color: #dbeafe !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+
+.status-badge.bg-gray-100 {
+  background-color: #f3f4f6 !important;
+  color: #6b7280 !important;
+  border-color: #d1d5db !important;
+}
+
+.time-badge {
+  background-color: #f3e8ff !important;
+  color: #7c3aed !important;
+  border-color: #e9d5ff !important;
+}
+
 /* Modal styles */
 .modal-overlay {
   @apply fixed inset-0 bg-black bg-opacity-50 transition-opacity;

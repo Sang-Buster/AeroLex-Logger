@@ -31,6 +31,9 @@ class VRFlightApp {
       // Setup service worker (if available)
       this.setupServiceWorker();
 
+      // Setup video error suppression
+      this.setupVideoErrorSuppression();
+
       // Mark as initialized
       this.initialized = true;
 
@@ -70,6 +73,21 @@ class VRFlightApp {
         event.reason instanceof TypeError &&
         event.reason.message.includes("fetch")
       ) {
+        event.preventDefault();
+        return;
+      }
+
+      // Don't show error for video/media related aborts (common when seeking)
+      if (
+        event.reason instanceof DOMException &&
+        (event.reason.message.includes("fetching process") ||
+          event.reason.message.includes("media resource") ||
+          event.reason.message.includes("aborted by the user agent") ||
+          event.reason.name === "AbortError" ||
+          event.reason.name === "NotAllowedError")
+      ) {
+        console.warn("🎬 Video/media operation interrupted (normal behavior)");
+        event.preventDefault(); // Prevent the error from propagating
         return;
       }
 
@@ -78,6 +96,20 @@ class VRFlightApp {
 
     // Global error handler for JavaScript errors
     window.addEventListener("error", (event) => {
+      // Handle video media fetch abort errors specifically
+      if (
+        event.error instanceof DOMException &&
+        event.error.message &&
+        event.error.message.includes(
+          "fetching process for the media resource was aborted",
+        )
+      ) {
+        console.warn("🎬 Video fetch aborted (suppressed)");
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      }
+
       console.error("❌ Global JavaScript error:", event.error);
 
       // Don't show error for script loading errors
@@ -105,6 +137,71 @@ class VRFlightApp {
     // Service Worker disabled for local development
     // Can be enabled later for offline support
     console.log("ℹ️ Service Worker disabled for local development");
+  }
+
+  setupVideoErrorSuppression() {
+    // Aggressive video error suppression for media fetch aborts
+    console.log("🎬 Setting up video error suppression...");
+
+    // Override console.error temporarily to catch and suppress video fetch errors
+    const originalConsoleError = console.error;
+    console.error = function (...args) {
+      const message = args.join(" ");
+      if (
+        message.includes(
+          "fetching process for the media resource was aborted",
+        ) ||
+        message.includes("media resource was aborted")
+      ) {
+        console.warn("🎬 Suppressed video fetch abort error");
+        return;
+      }
+      originalConsoleError.apply(console, args);
+    };
+
+    // Add comprehensive DOM-level error handlers
+    document.addEventListener("DOMContentLoaded", () => {
+      // Find all video elements and add error handlers
+      const addVideoErrorHandlers = () => {
+        const videos = document.querySelectorAll("video");
+        videos.forEach((video) => {
+          const handleVideoError = (event) => {
+            if (event.target.error) {
+              console.warn(
+                "🎬 Video element error (suppressed):",
+                event.target.error,
+              );
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          };
+
+          video.addEventListener("error", handleVideoError, true);
+          video.addEventListener(
+            "abort",
+            (event) => {
+              console.warn("🎬 Video abort (suppressed)");
+              event.preventDefault();
+              event.stopPropagation();
+            },
+            true,
+          );
+        });
+      };
+
+      // Initial setup
+      addVideoErrorHandlers();
+
+      // Re-setup when DOM changes (for dynamically added videos)
+      const observer = new MutationObserver(() => {
+        addVideoErrorHandlers();
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+    });
   }
 
   // Utility methods
@@ -316,6 +413,37 @@ style.textContent = `
     }
 `;
 document.head.appendChild(style);
+
+// Ultimate fallback: suppress all video-related DOMExceptions at the global level
+window.addEventListener("unhandledrejection", function (event) {
+  if (
+    event.reason &&
+    event.reason
+      .toString()
+      .includes("fetching process for the media resource was aborted")
+  ) {
+    console.warn("🎬 Video fetch abort silently handled");
+    event.preventDefault();
+  }
+});
+
+// Also handle as error events
+window.addEventListener(
+  "error",
+  function (event) {
+    if (
+      event.error &&
+      event.error
+        .toString()
+        .includes("fetching process for the media resource was aborted")
+    ) {
+      console.warn("🎬 Video fetch abort error silently handled");
+      event.preventDefault();
+      return false;
+    }
+  },
+  true,
+);
 
 // Start performance monitoring in development
 if (

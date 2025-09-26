@@ -53,22 +53,35 @@ class VideoService:
     @staticmethod
     def generate_video_id(filename: str) -> str:
         """Generate a consistent video ID from filename"""
-        # Remove extension and use first part as ID
+        # Remove extension
         base_name = Path(filename).stem
+        
+        # Handle new naming convention (e.g., "01_7L_Departure_North")
+        if '_' in base_name and not base_name.startswith(('01-', '03-', '04-')):
+            # New format: use the full filename as ID (lowercased)
+            return base_name.lower()
+        
+        # Handle old naming convention (e.g., "01-1 - 7L Departure North") 
         # Take the first part before the first space or underscore
         clean_name = base_name.split()[0] if ' ' in base_name else base_name.split('_')[0]
         return clean_name.lower().replace('-', '_')
     
     @staticmethod
     def format_video_title(filename_stem: str) -> str:
-        """Format video title from filename like '01-1 - Title_Part 2' -> 'Title Part 2'"""
+        """Format video title from filename"""
         title = filename_stem
 
-        # Remove leading numbering like "01-1 - " or "11-3 - "
-        title = re.sub(r'^\d+-\d+\s*-\s*', '', title)
-
-        # Replace underscores with spaces
-        title = title.replace('_', ' ')
+        # Handle new naming convention (e.g., "01_7L_Departure_North")
+        if '_' in title and not title.startswith(('01-', '03-', '04-')):
+            # New format: remove number prefix and replace underscores with spaces
+            title = re.sub(r'^\d+_', '', title)  # Remove "01_" prefix
+            title = title.replace('_', ' ')
+        else:
+            # Handle old naming convention (e.g., "01-1 - 7L Departure North")
+            # Remove leading numbering like "01-1 - " or "11-3 - "
+            title = re.sub(r'^\d+-\d+\s*-\s*', '', title)
+            # Replace underscores with spaces
+            title = title.replace('_', ' ')
 
         # Capitalize each word but preserve certain patterns
         words = title.split()
@@ -88,6 +101,35 @@ class VideoService:
         title = " ".join(formatted_words)
 
         return title
+    
+    @staticmethod
+    def _convert_to_mixed_case(video_id: str) -> str:
+        """Convert lowercase video_id to mixed-case filename format
+        Example: '01_7l_departure_north' -> '01_7L_Departure_North'
+        """
+        parts = video_id.split('_')
+        formatted_parts = []
+        
+        for i, part in enumerate(parts):
+            # Keep the first part (number) as-is
+            if i == 0 and part.isdigit():
+                formatted_parts.append(part)
+            # Handle runway designators like "7l", "7r" -> "7L", "7R"
+            elif part.lower() in ['7l', '7r', '25l', '25r', '25c'] or (
+                len(part) == 2 and part[0].isdigit() and part[1].lower() in ['l', 'r', 'c']
+            ):
+                formatted_parts.append(part.upper())
+            # Handle common aviation abbreviations
+            elif part.upper() in {'VFR', 'IFR', 'GPS', 'VOR', 'ILS', 'DME', 'ATC', 'FSS', 'CTAF', 'UNICOM', 'ATIS'}:
+                formatted_parts.append(part.upper())
+            # Handle special cases like "st" in "st_augustine"
+            elif part.lower() == 'st':
+                formatted_parts.append('St')
+            # Capitalize regular words
+            else:
+                formatted_parts.append(part.capitalize())
+        
+        return '_'.join(formatted_parts)
     
     @staticmethod
     async def get_videos_for_student(student_id: str) -> List[Dict[str, Any]]:
@@ -119,9 +161,14 @@ class VideoService:
         """Get ground truth text for a video"""
         ground_truth_dir = Path(__file__).parent.parent.parent / "data" / "ground_truth"
         
+        # Generate mixed-case version for new naming convention
+        # Convert from "01_7l_departure_north" to "01_7L_Departure_North"
+        mixed_case_id = VideoService._convert_to_mixed_case(video_id)
+        
         # Try different possible filenames
         possible_files = [
-            ground_truth_dir / f"{video_id}.txt",
+            ground_truth_dir / f"{video_id}.txt",  # Lowercase (old format)
+            ground_truth_dir / f"{mixed_case_id}.txt",  # Mixed case (new format) 
             ground_truth_dir / f"{video_id}_ground_truth.txt",
             ground_truth_dir / f"ground_truth_{video_id}.txt"
         ]

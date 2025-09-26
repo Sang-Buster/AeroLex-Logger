@@ -56,6 +56,16 @@ class VideoPlayerManager {
       videoPlayer.addEventListener("play", () => this.onVideoPlay());
       videoPlayer.addEventListener("pause", () => this.onVideoPause());
       videoPlayer.addEventListener("ended", () => this.onVideoEnd());
+
+      // Add error handlers for video operations
+      videoPlayer.addEventListener("error", (e) => this.onVideoError(e));
+      videoPlayer.addEventListener("stalled", () => this.onVideoStalled());
+      videoPlayer.addEventListener("suspend", () => this.onVideoSuspend());
+      videoPlayer.addEventListener("abort", () => this.onVideoAbort());
+
+      // Handle seeking events to prevent promise rejections
+      videoPlayer.addEventListener("seeking", () => this.onVideoSeeking());
+      videoPlayer.addEventListener("seeked", () => this.onVideoSeeked());
     }
 
     // VR controls
@@ -192,8 +202,46 @@ class VideoPlayerManager {
     if (videoPlayer && vrContainer) {
       videoPlayer.classList.remove("hidden");
       vrContainer.classList.add("hidden");
+
+      // Set video source and handle loading gracefully
       videoPlayer.src = video.video_url;
-      videoPlayer.load();
+
+      // Wrap video loading in promise to catch all errors
+      const loadVideo = async () => {
+        try {
+          videoPlayer.load();
+
+          // Handle any pending play promises
+          if (videoPlayer.readyState >= 2) {
+            return Promise.resolve();
+          }
+
+          return new Promise((resolve, reject) => {
+            const onCanPlay = () => {
+              videoPlayer.removeEventListener("canplay", onCanPlay);
+              videoPlayer.removeEventListener("error", onError);
+              resolve();
+            };
+
+            const onError = (error) => {
+              videoPlayer.removeEventListener("canplay", onCanPlay);
+              videoPlayer.removeEventListener("error", onError);
+              console.warn("⚠️ Video load error:", error);
+              resolve(); // Don't reject, just resolve to continue
+            };
+
+            videoPlayer.addEventListener("canplay", onCanPlay);
+            videoPlayer.addEventListener("error", onError);
+          });
+        } catch (error) {
+          console.warn("⚠️ Video load error:", error);
+        }
+      };
+
+      loadVideo().catch((error) => {
+        console.warn("⚠️ Video loading failed:", error);
+      });
+
       this.isVRMode = false;
     }
   }
@@ -236,7 +284,12 @@ class VideoPlayerManager {
         videoPlayer.currentTime = currentTime;
       }
       if (!paused) {
-        videoPlayer.play();
+        const playPromise = videoPlayer.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => {
+            console.warn("⚠️ Video resume play failed:", error);
+          });
+        }
       }
 
       toggleBtn.textContent = "🥽 Switch to VR Mode";
@@ -256,7 +309,12 @@ class VideoPlayerManager {
           this.vrVideo.currentTime = currentTime;
         }
         if (this.vrVideo && !paused) {
-          this.vrVideo.play();
+          const playPromise = this.vrVideo.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((error) => {
+              console.warn("⚠️ VR video resume play failed:", error);
+            });
+          }
         }
       }, 100);
 
@@ -273,11 +331,24 @@ class VideoPlayerManager {
         playButton.addEventListener("click", () => {
           if (this.vrVideo) {
             if (this.vrVideo.paused) {
-              this.vrVideo.play();
-              playButton.setAttribute(
-                "text",
-                "value: ⏸ PAUSE; align: center; color: white; width: 10",
-              );
+              const playPromise = this.vrVideo.play();
+              if (playPromise !== undefined) {
+                playPromise
+                  .then(() => {
+                    playButton.setAttribute(
+                      "text",
+                      "value: ⏸ PAUSE; align: center; color: white; width: 10",
+                    );
+                  })
+                  .catch((error) => {
+                    console.warn("⚠️ VR control play failed:", error);
+                  });
+              } else {
+                playButton.setAttribute(
+                  "text",
+                  "value: ⏸ PAUSE; align: center; color: white; width: 10",
+                );
+              }
             } else {
               this.vrVideo.pause();
               playButton.setAttribute(
@@ -597,10 +668,53 @@ class VideoPlayerManager {
     }
   }
 
+  // Video error handlers
+  onVideoError(event) {
+    console.warn("⚠️ Video error:", event);
+    const videoPlayer = document.getElementById("video-player");
+    if (videoPlayer && videoPlayer.error) {
+      const error = videoPlayer.error;
+      console.warn("Video error details:", {
+        code: error.code,
+        message: error.message,
+      });
+
+      // Don't show user notification for network errors during seeking
+      if (error.code !== MediaError.MEDIA_ERR_NETWORK) {
+        this.showNotification("Video playback error occurred", "warning");
+      }
+    }
+  }
+
+  onVideoStalled() {
+    console.log("⏳ Video stalled (buffering)");
+  }
+
+  onVideoSuspend() {
+    console.log("⏸️ Video loading suspended");
+  }
+
+  onVideoAbort() {
+    console.log("🛑 Video loading aborted");
+  }
+
+  onVideoSeeking() {
+    console.log("⏩ Video seeking...");
+  }
+
+  onVideoSeeked() {
+    console.log("✅ Video seek completed");
+  }
+
   toggleVideoPlayback() {
     if (this.isVRMode && this.vrVideo) {
       if (this.vrVideo.paused) {
-        this.vrVideo.play();
+        const playPromise = this.vrVideo.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => {
+            console.warn("⚠️ VR video play failed:", error);
+          });
+        }
       } else {
         this.vrVideo.pause();
       }
@@ -608,7 +722,12 @@ class VideoPlayerManager {
       const videoPlayer = document.getElementById("video-player");
       if (videoPlayer) {
         if (videoPlayer.paused) {
-          videoPlayer.play();
+          const playPromise = videoPlayer.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((error) => {
+              console.warn("⚠️ Video play failed:", error);
+            });
+          }
         } else {
           videoPlayer.pause();
         }

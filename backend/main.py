@@ -4,6 +4,7 @@ VR Flight Training Course Backend
 FastAPI application for student management, progress tracking, and ASR integration
 """
 
+import re
 import sys
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -86,10 +87,68 @@ web_directory = Path(__file__).parent.parent / "web"
 if web_directory.exists():
     app.mount("/static", StaticFiles(directory=str(web_directory), html=True), name="static")
 
-# Serve videos
+# Serve videos with proper byte-range support
 videos_directory = Path(__file__).parent.parent / "videos"
 if videos_directory.exists():
-    app.mount("/videos", StaticFiles(directory=str(videos_directory)), name="videos")
+    from fastapi import HTTPException, Request
+    from fastapi.responses import FileResponse, StreamingResponse
+    
+    @app.api_route("/videos/{filename}", methods=["GET", "HEAD"])
+    async def serve_video(filename: str, request: Request):
+        """Serve video files with proper byte-range support for seeking"""
+        video_path = videos_directory / filename
+        
+        if not video_path.exists():
+            raise HTTPException(status_code=404, detail="Video not found")
+        
+        file_size = video_path.stat().st_size
+        
+        # Handle range requests for video seeking
+        range_header = request.headers.get('range')
+        
+        if range_header:
+            # Parse range header
+            range_match = re.match(r'bytes=(\d+)-(\d*)', range_header)
+            if range_match:
+                start = int(range_match.group(1))
+                end = int(range_match.group(2)) if range_match.group(2) else file_size - 1
+                
+                # Ensure end doesn't exceed file size
+                end = min(end, file_size - 1)
+                content_length = end - start + 1
+                
+                def iter_file_range():
+                    with open(video_path, 'rb') as f:
+                        f.seek(start)
+                        remaining = content_length
+                        while remaining > 0:
+                            chunk_size = min(8192, remaining)
+                            chunk = f.read(chunk_size)
+                            if not chunk:
+                                break
+                            remaining -= len(chunk)
+                            yield chunk
+                
+                return StreamingResponse(
+                    iter_file_range(),
+                    status_code=206,
+                    headers={
+                        'Accept-Ranges': 'bytes',
+                        'Content-Range': f'bytes {start}-{end}/{file_size}',
+                        'Content-Length': str(content_length),
+                        'Content-Type': 'video/mp4',
+                    }
+                )
+        
+        # Regular file response for non-range requests
+        return FileResponse(
+            video_path,
+            media_type='video/mp4',
+            headers={'Accept-Ranges': 'bytes'}
+        )
+    
+    # Keep StaticFiles as fallback
+    app.mount("/videos-static", StaticFiles(directory=str(videos_directory)), name="videos-static")
 
 
 @app.get("/")

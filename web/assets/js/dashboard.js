@@ -288,23 +288,29 @@ class DashboardManager {
     const info = document.createElement("div");
     info.className = "p-4";
 
-    // Title and Status Row
-    const titleRow = document.createElement("div");
-    titleRow.className = "flex items-center justify-between mb-2";
+    // Top row with equal-width badges
+    const badgesRow = document.createElement("div");
+    badgesRow.className = "video-badges-row";
 
-    const title = document.createElement("h4");
-    title.className =
-      "font-semibold text-gray-900 truncate text-lg flex-1 mr-2";
-    title.textContent = video.title;
+    // Score badge
+    const scoreBadge = document.createElement("span");
+    if (video.best_score > 0) {
+      const scorePercent = Math.round(video.best_score * 100);
+      const scoreBadgeClass = this.getScoreBadgeClass(scorePercent);
+      scoreBadge.className = `score-badge ${scoreBadgeClass}`;
+      scoreBadge.textContent = `${scorePercent}%`;
+    } else {
+      scoreBadge.className = "score-badge score-badge-none";
+      scoreBadge.textContent = "No Score";
+    }
 
-    // Status badge (smaller, inline)
+    // Status badge
     const statusBadge = document.createElement("span");
-    statusBadge.className =
-      "inline-flex items-center px-2 py-1 rounded text-xs font-medium flex-shrink-0";
+    statusBadge.className = "status-badge";
 
     if (video.completed) {
       statusBadge.className += " bg-green-100 text-green-700";
-      statusBadge.innerHTML = "✓ Completed";
+      statusBadge.innerHTML = "✓ Done";
     } else if (video.unlocked) {
       statusBadge.className += " bg-blue-100 text-blue-700";
       statusBadge.innerHTML = "▶ Available";
@@ -313,50 +319,37 @@ class DashboardManager {
       statusBadge.innerHTML = "🔒 Locked";
     }
 
-    titleRow.appendChild(title);
-    titleRow.appendChild(statusBadge);
+    // Time spent badge (estimated based on attempts)
+    const timeBadge = document.createElement("span");
+    timeBadge.className = "time-badge";
+    const estimatedTime = (video.attempts || 0) * 2; // 2 minutes per attempt
+    timeBadge.innerHTML = `⏱️ ${estimatedTime}m`;
 
-    // Description (truncated)
-    const description = document.createElement("p");
-    description.className =
-      "text-sm text-gray-600 mb-3 line-clamp-2 leading-relaxed";
-    description.textContent = video.description;
+    badgesRow.appendChild(scoreBadge);
+    badgesRow.appendChild(statusBadge);
+    badgesRow.appendChild(timeBadge);
 
-    info.appendChild(titleRow);
-    info.appendChild(description);
+    // Video Title (clean, below badges)
+    const videoTitle = document.createElement("h4");
+    videoTitle.className = "font-semibold text-gray-900 text-sm leading-tight";
+    videoTitle.textContent = video.title;
 
-    // Best score (if available)
-    if (video.best_score > 0) {
-      const scoreContainer = document.createElement("div");
-      scoreContainer.className =
-        "flex items-center justify-between pt-2 border-t border-gray-100";
-
-      const scoreLabel = document.createElement("div");
-      scoreLabel.className = "text-xs text-gray-500 font-medium";
-      scoreLabel.textContent = "Best Score";
-
-      const score = document.createElement("div");
-      score.className = "text-sm font-bold";
-      const scorePercent = Math.round(video.best_score * 100);
-      score.textContent = `${scorePercent}%`;
-
-      // Color code the score
-      if (scorePercent >= 90) {
-        score.classList.add("text-green-600");
-      } else if (scorePercent >= 70) {
-        score.classList.add("text-blue-600");
-      } else if (scorePercent >= 50) {
-        score.classList.add("text-yellow-600");
-      } else {
-        score.classList.add("text-red-600");
-      }
-
-      scoreContainer.appendChild(scoreLabel);
-      scoreContainer.appendChild(score);
-      info.appendChild(scoreContainer);
-    }
+    info.appendChild(badgesRow);
+    info.appendChild(videoTitle);
 
     return info;
+  }
+
+  getScoreColorClass(scorePercent) {
+    if (scorePercent >= 80) {
+      return "text-green-600";
+    } else if (scorePercent >= 70) {
+      return "text-blue-600";
+    } else if (scorePercent >= 50) {
+      return "text-yellow-600";
+    } else {
+      return "text-red-600";
+    }
   }
 
   showLoadingState() {
@@ -364,14 +357,23 @@ class DashboardManager {
     if (videosGrid) {
       videosGrid.innerHTML = "";
 
-      // Create skeleton cards
+      // Create skeleton cards matching equal-width badge layout
       for (let i = 0; i < 6; i++) {
         const skeleton = document.createElement("div");
-        skeleton.className = "animate-pulse";
+        skeleton.className =
+          "animate-pulse bg-white rounded-lg shadow-md overflow-hidden";
         skeleton.innerHTML = `
-                    <div class="bg-gray-300 aspect-video rounded-lg mb-3"></div>
-                    <div class="h-4 bg-gray-300 rounded mb-2"></div>
-                    <div class="h-3 bg-gray-300 rounded w-3/4"></div>
+                    <div class="bg-gray-300 aspect-video rounded-t-lg"></div>
+                    <div class="p-4">
+                      <!-- Perfect equal-width badges row skeleton -->
+                      <div class="video-badges-row">
+                        <div class="score-badge bg-gray-300"></div>
+                        <div class="status-badge bg-gray-300"></div>
+                        <div class="time-badge bg-gray-300"></div>
+                      </div>
+                      <!-- Title skeleton -->
+                      <div class="h-5 bg-gray-300 rounded w-3/4"></div>
+                    </div>
                 `;
         videosGrid.appendChild(skeleton);
       }

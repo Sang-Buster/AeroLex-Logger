@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>VR Flight Training Course</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- A-Frame for VR Video Support -->
+    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="assets/css/main.css" />
+    <link rel="stylesheet" href="assets/css/vr-styles.css" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="assets/img/favicon.svg" />
+  </head>
+  <body class="bg-gray-50 min-h-screen">
+    <!-- Main Container -->
+    <div id="app" class="min-h-screen">
+      <!-- Login Screen -->
+      <div
+        id="login-screen"
+        class="min-h-screen flex items-center justify-center p-4"
+      >
+        <div class="max-w-md w-full space-y-8">
+          <!-- Header -->
+          <div class="text-center">
+            <div
+              class="mx-auto h-24 w-24 rounded-full flex items-center justify-center p-1"
+            >
+              <img
+                src="assets/img/favicon.svg"
+                alt="VR Flight Training"
+                class="h-full w-full"
+              />
+            </div>
+            <h2 class="mt-6 mb-20 text-3xl font-bold text-gray-900">
+              AS 101: VR Flight Training
+            </h2>
+          </div>
+
+          <!-- Login Form -->
+          <form id="login-form" class="mt-8 space-y-6">
+            <div class="space-y-4">
+              <div>
+                <label
+                  for="student-name"
+                  class="block text-sm font-medium text-gray-700"
+                  >Full Name</label
+                >
+                <input
+                  id="student-name"
+                  name="name"
+                  type="text"
+                  required
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter your full name"
+                />
+              </div>
+
+              <div>
+                <label
+                  for="student-id"
+                  class="block text-sm font-medium text-gray-700"
+                  >Student ID</label
+                >
+                <input
+                  id="student-id"
+                  name="student_id"
+                  type="text"
+                  required
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter your student ID"
+                />
+              </div>
+            </div>
+
+            <!-- Error/Success Messages -->
+            <div id="login-message" class="hidden">
+              <div class="rounded-md p-4">
+                <div class="text-sm" id="login-message-text"></div>
+              </div>
+            </div>
+
+            <div>
+              <button
+                id="login-btn"
+                type="submit"
+                class="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span id="login-btn-text">Continue to Course</span>
+                <svg
+                  id="login-spinner"
+                  class="hidden animate-spin -mr-1 ml-3 h-5 w-5 text-white"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                  ></circle>
+                  <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  ></path>
+                </svg>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Main Dashboard -->
+      <div id="dashboard-screen" class="hidden min-h-screen">
+        <!-- Navigation Bar -->
+        <nav class="bg-white shadow-sm border-b border-gray-200">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+              <div class="flex items-center">
+                <div class="flex-shrink-0 flex items-center">
+                  <div
+                    class="h-10 w-10 rounded-full flex items-center justify-center p-1"
+                  >
+                    <img
+                      src="assets/img/favicon.svg"
+                      alt="VR Flight Training"
+                      class="h-full w-full"
+                    />
+                  </div>
+                  <h1 class="ml-3 text-xl font-bold text-gray-900">
+                    AS 101: VR Flight Training
+                  </h1>
+                </div>
+              </div>
+
+              <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-3">
+                  <svg
+                    class="h-5 w-5 text-gray-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                    />
+                  </svg>
+                  <div class="font-medium text-gray-900" id="nav-student-name">
+                    Loading...
+                  </div>
+                </div>
+                <button
+                  id="logout-btn"
+                  class="text-gray-400 hover:text-gray-600"
+                >
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 min-h-screen">
+          <!-- Dashboard Overview -->
+          <div id="overview-section" class="mb-8">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+              <div class="p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                  Progress Overview
+                </h3>
+
+                <!-- Stats Grid -->
+                <div
+                  class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4"
+                >
+                  <div class="bg-blue-50 overflow-hidden rounded-lg">
+                    <div class="p-5">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                          <svg
+                            class="h-6 w-6 text-blue-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                          <dl>
+                            <dt
+                              class="text-sm font-medium text-gray-500 truncate"
+                            >
+                              Completed Videos
+                            </dt>
+                            <dd
+                              class="text-lg font-medium text-gray-900"
+                              id="stats-completed"
+                            >
+                              0 / 0
+                            </dd>
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-green-50 overflow-hidden rounded-lg">
+                    <div class="p-5">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                          <svg
+                            class="h-6 w-6 text-green-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                            />
+                          </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                          <dl>
+                            <dt
+                              class="text-sm font-medium text-gray-500 truncate"
+                            >
+                              Average Score
+                            </dt>
+                            <dd
+                              class="text-lg font-medium text-gray-900"
+                              id="stats-avg-score"
+                            >
+                              0%
+                            </dd>
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-purple-50 overflow-hidden rounded-lg">
+                    <div class="p-5">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                          <svg
+                            class="h-6 w-6 text-purple-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M7 4V2a1 1 0 011-1h8a1 1 0 011 1v2h4a1 1 0 110 2h-1v12a2 2 0 01-2 2H6a2 2 0 01-2-2V6H3a1 1 0 110-2h4zM9 6h6v10H9V6z"
+                            />
+                          </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                          <dl>
+                            <dt
+                              class="text-sm font-medium text-gray-500 truncate"
+                            >
+                              Total Attempts
+                            </dt>
+                            <dd
+                              class="text-lg font-medium text-gray-900"
+                              id="stats-attempts"
+                            >
+                              0
+                            </dd>
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-yellow-50 overflow-hidden rounded-lg">
+                    <div class="p-5">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                          <svg
+                            class="h-6 w-6 text-yellow-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                          <dl>
+                            <dt
+                              class="text-sm font-medium text-gray-500 truncate"
+                            >
+                              Time Spent
+                            </dt>
+                            <dd
+                              class="text-lg font-medium text-gray-900"
+                              id="stats-time"
+                            >
+                              0 min
+                            </dd>
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Video Grid -->
+          <div
+            id="videos-section"
+            class="bg-white overflow-hidden shadow rounded-lg"
+          >
+            <div class="p-6">
+              <h3 class="text-lg leading-6 font-medium text-gray-900 mb-6">
+                Training Videos
+              </h3>
+
+              <!-- Videos Grid -->
+              <div
+                id="videos-grid"
+                class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3"
+              >
+                <!-- Video cards will be loaded here -->
+                <div class="animate-pulse">
+                  <div class="bg-gray-300 aspect-video rounded-lg"></div>
+                  <div class="mt-3 h-4 bg-gray-300 rounded"></div>
+                  <div class="mt-2 h-3 bg-gray-300 rounded w-3/4"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      <!-- Video Player Modal -->
+      <div id="video-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
+        <div
+          class="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0"
+        >
+          <!-- Background overlay -->
+          <div
+            class="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+          ></div>
+
+          <!-- Modal panel -->
+          <div
+            class="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-6xl sm:w-full sm:p-6"
+          >
+            <!-- Modal header -->
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h3
+                  class="text-lg font-medium text-gray-900"
+                  id="modal-video-title"
+                >
+                  Loading...
+                </h3>
+                <p
+                  class="mt-1 text-sm text-gray-500"
+                  id="modal-video-description"
+                >
+                  Loading video...
+                </p>
+              </div>
+              <button
+                id="close-modal"
+                class="text-gray-400 hover:text-gray-600"
+              >
+                <svg
+                  class="h-6 w-6"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M6 18L18 6M6 6l12 12"
+                  />
+                </svg>
+              </button>
+            </div>
+
+            <!-- Video player -->
+            <div class="mb-6">
+              <!-- Regular video player -->
+              <video
+                id="video-player"
+                class="w-full aspect-video bg-black rounded-lg"
+                controls
+              >
+                <source src="" type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+
+              <!-- VR video player (A-Frame) -->
+              <div
+                id="vr-player-container"
+                class="hidden w-full aspect-video bg-black rounded-lg"
+              >
+                <a-scene
+                  id="vr-scene"
+                  embedded
+                  style="height: 100%; width: 100%"
+                  background="color: #000000"
+                  vr-mode-ui="enabled: true"
+                  cursor="rayOrigin: mouse; fuse: false"
+                  raycaster="objects: .raycastable"
+                >
+                  <!-- VR video sphere -->
+                  <a-videosphere
+                    id="vr-videosphere"
+                    src=""
+                    rotation="0 0 0"
+                    radius="100"
+                    phi-length="360"
+                    theta-length="180"
+                  ></a-videosphere>
+
+                  <!-- VR controls -->
+                  <a-entity id="vr-controls" position="0 0 0">
+                    <!-- Play/Pause button -->
+                    <a-box
+                      class="raycastable"
+                      id="vr-play-button"
+                      position="0 -2 -5"
+                      width="1"
+                      height="0.5"
+                      depth="0.1"
+                      color="#4CAF50"
+                      text="value: ▶ PLAY; align: center; color: white; width: 10"
+                    ></a-box>
+                  </a-entity>
+
+                  <!-- Camera -->
+                  <a-camera
+                    look-controls="enabled: true"
+                    wasd-controls="enabled: false"
+                  ></a-camera>
+                </a-scene>
+              </div>
+
+              <!-- VR Mode Toggle Button -->
+              <div class="mt-2 flex justify-center">
+                <button
+                  id="toggle-vr-mode"
+                  class="hidden px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                >
+                  🥽 Switch to VR Mode
+                </button>
+              </div>
+            </div>
+
+            <!-- Live transcription -->
+            <div class="bg-gray-50 rounded-lg p-4 mb-4">
+              <h4 class="text-sm font-medium text-gray-900 mb-2">
+                Live Transcription
+              </h4>
+              <div
+                id="live-transcript"
+                class="text-sm text-gray-600 min-h-[40px] max-h-32 overflow-y-auto"
+              >
+                <p class="text-gray-400">
+                  Start speaking to see live transcription...
+                </p>
+              </div>
+            </div>
+
+            <!-- Controls -->
+            <div class="flex items-center justify-between">
+              <div class="flex items-center space-x-4">
+                <button
+                  id="start-recording"
+                  class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                >
+                  <svg
+                    class="h-4 w-4 mr-2"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                  </svg>
+                  Start Recording
+                </button>
+
+                <button
+                  id="stop-recording"
+                  class="hidden inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                >
+                  <svg
+                    class="h-4 w-4 mr-2"
+                    fill="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <rect x="6" y="6" width="12" height="12" />
+                  </svg>
+                  Stop Recording
+                </button>
+              </div>
+
+              <div
+                id="recording-status"
+                class="hidden flex items-center space-x-2"
+              >
+                <div
+                  class="animate-pulse h-2 w-2 bg-red-500 rounded-full"
+                ></div>
+                <span class="text-sm text-red-600">Recording...</span>
+              </div>
+            </div>
+
+            <!-- Results section -->
+            <div
+              id="results-section"
+              class="hidden mt-6 p-4 bg-blue-50 rounded-lg"
+            >
+              <h4 class="text-sm font-medium text-blue-900 mb-3">
+                Evaluation Results
+              </h4>
+              <div id="evaluation-results" class="text-sm text-blue-800">
+                <!-- Results will be shown here -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/dashboard.js"></script>
+    <script src="assets/js/video.js"></script>
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>

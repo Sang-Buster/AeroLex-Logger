@@ -6,14 +6,18 @@ authors = [{ name = "Sang Buster", email = "hello@singsongaftermath.com" }]
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "aiosqlite>=0.21.0",
+    "fastapi>=0.117.1",
     "faster-whisper>=1.2.0",
     "hf-xet>=1.1.10",
     "jsonlines>=4.0.0",
     "numpy>=2.2.6",
+    "requests>=2.32.5",
     "scipy>=1.10.0",
     "silero-vad>=6.0.0",
     "sounddevice>=0.5.2",
     "torch>=2.0.0",
+    "uvicorn>=0.37.0",
 ]
 
 [dependency-groups]

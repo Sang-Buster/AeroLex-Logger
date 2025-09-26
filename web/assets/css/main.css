@@ -1,0 +1,361 @@
+/* VR Flight Training Course - Main Styles */
+
+/* ShadCN UI inspired components */
+
+/* Custom animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-recording {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Base components */
+.btn {
+  @apply inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none ring-offset-background;
+}
+
+.btn-primary {
+  @apply bg-blue-600 text-white hover:bg-blue-700;
+}
+
+.btn-secondary {
+  @apply bg-gray-200 text-gray-900 hover:bg-gray-300;
+}
+
+.btn-success {
+  @apply bg-green-600 text-white hover:bg-green-700;
+}
+
+.btn-danger {
+  @apply bg-red-600 text-white hover:bg-red-700;
+}
+
+.btn-sm {
+  @apply h-9 px-3;
+}
+
+.btn-md {
+  @apply h-10 px-4 py-2;
+}
+
+.btn-lg {
+  @apply h-11 px-8;
+}
+
+/* Card components */
+.card {
+  @apply bg-white rounded-lg border shadow-sm;
+}
+
+.card-header {
+  @apply flex flex-col space-y-1.5 p-6;
+}
+
+.card-title {
+  @apply text-2xl font-semibold leading-none tracking-tight;
+}
+
+.card-description {
+  @apply text-sm text-gray-600;
+}
+
+.card-content {
+  @apply p-6 pt-0;
+}
+
+/* Video card styles */
+.video-card {
+  @apply bg-white rounded-lg shadow-md overflow-hidden transition-all duration-200 hover:shadow-lg hover:scale-105;
+}
+
+.video-card.locked {
+  @apply opacity-60 cursor-not-allowed;
+}
+
+.video-card.completed {
+  @apply ring-2 ring-green-500;
+}
+
+.video-thumbnail {
+  @apply aspect-video bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white relative overflow-hidden;
+}
+
+.video-thumbnail::before {
+  content: "";
+  @apply absolute inset-0 bg-black bg-opacity-20;
+}
+
+.video-thumbnail .play-icon {
+  @apply relative z-10 h-12 w-12 text-white opacity-80;
+}
+
+.video-card.locked .play-icon {
+  @apply opacity-30;
+}
+
+.video-info {
+  @apply p-4;
+}
+
+.video-title {
+  @apply font-semibold text-gray-900 mb-2 truncate;
+}
+
+.video-description {
+  @apply text-sm text-gray-600 mb-3 line-clamp-2;
+}
+
+.video-progress {
+  @apply flex items-center justify-between text-xs;
+}
+
+.progress-bar {
+  @apply w-full bg-gray-200 rounded-full h-2 overflow-hidden;
+}
+
+.progress-fill {
+  @apply bg-blue-600 h-full transition-all duration-300;
+}
+
+/* Status badges */
+.badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+}
+
+.badge-unlocked {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-locked {
+  @apply bg-gray-100 text-gray-800;
+}
+
+.badge-completed {
+  @apply bg-blue-100 text-blue-800;
+}
+
+/* Modal styles */
+.modal-overlay {
+  @apply fixed inset-0 bg-black bg-opacity-50 transition-opacity;
+}
+
+.modal-content {
+  @apply bg-white rounded-lg shadow-xl max-w-6xl mx-auto my-8 overflow-hidden;
+}
+
+/* Live transcription styles */
+.transcription-container {
+  @apply bg-gray-50 border rounded-lg p-4;
+}
+
+.transcription-text {
+  @apply text-sm text-gray-700 min-h-[100px] max-h-[200px] overflow-y-auto;
+}
+
+.transcription-item {
+  @apply mb-2 p-2 bg-white rounded border-l-4 border-blue-500;
+  animation: fadeIn 0.3s ease-in;
+}
+
+.transcription-confidence {
+  @apply text-xs text-gray-500 ml-2;
+}
+
+.transcription-confidence.high {
+  @apply text-green-600;
+}
+
+.transcription-confidence.medium {
+  @apply text-yellow-600;
+}
+
+.transcription-confidence.low {
+  @apply text-red-600;
+}
+
+/* Recording indicator */
+.recording-indicator {
+  @apply flex items-center space-x-2 text-red-600;
+}
+
+.recording-dot {
+  @apply h-3 w-3 bg-red-500 rounded-full;
+  animation: pulse-recording 1.5s ease-in-out infinite;
+}
+
+/* Score display */
+.score-display {
+  @apply flex items-center space-x-4 p-4 bg-gradient-to-r from-blue-50 to-green-50 rounded-lg border;
+}
+
+.score-item {
+  @apply text-center;
+}
+
+.score-value {
+  @apply text-2xl font-bold;
+}
+
+.score-value.excellent {
+  @apply text-green-600;
+}
+
+.score-value.good {
+  @apply text-blue-600;
+}
+
+.score-value.average {
+  @apply text-yellow-600;
+}
+
+.score-value.poor {
+  @apply text-red-600;
+}
+
+.score-label {
+  @apply text-xs font-medium text-gray-600 uppercase tracking-wider;
+}
+
+/* Loading states */
+.loading {
+  @apply animate-pulse;
+}
+
+.skeleton {
+  @apply bg-gray-300 rounded;
+}
+
+/* Responsive utilities */
+@media (max-width: 640px) {
+  .modal-content {
+    @apply mx-4 my-4 max-w-none;
+  }
+
+  .video-modal {
+    @apply p-4;
+  }
+
+  .stats-grid {
+    @apply grid-cols-2;
+  }
+}
+
+/* Video player enhancements */
+.video-player-container {
+  @apply relative bg-black rounded-lg overflow-hidden;
+}
+
+.video-controls-overlay {
+  @apply absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 opacity-0 hover:opacity-100 transition-opacity;
+}
+
+/* Notification styles */
+.notification {
+  @apply fixed top-4 right-4 z-50 max-w-sm w-full bg-white rounded-lg shadow-lg border-l-4 p-4;
+  animation: slideIn 0.3s ease-out;
+}
+
+.notification.success {
+  @apply border-green-500;
+}
+
+.notification.error {
+  @apply border-red-500;
+}
+
+.notification.info {
+  @apply border-blue-500;
+}
+
+.notification.warning {
+  @apply border-yellow-500;
+}
+
+/* Accessibility improvements */
+.focus-visible:focus {
+  @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+}
+
+/* Dark mode support (optional) */
+@media (prefers-color-scheme: dark) {
+  .dark-mode {
+    @apply bg-gray-900 text-white;
+  }
+
+  .dark-mode .card {
+    @apply bg-gray-800 border-gray-700;
+  }
+
+  .dark-mode .video-card {
+    @apply bg-gray-800;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Line clamp utility */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

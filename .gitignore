@@ -1,6 +1,8 @@
 .venv/
 audios/
+videos/
 logs/
 models/
+asr_sessions/
 **__pycache__**
 **.ruff_cache**

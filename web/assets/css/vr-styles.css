@@ -1,0 +1,85 @@
+/* VR Video Player Styles */
+
+.vr-player-container {
+  border-radius: 0.5rem;
+  overflow: hidden;
+  position: relative;
+}
+
+.vr-scene {
+  border-radius: 0.5rem;
+}
+
+/* VR Controls styling */
+.raycastable:hover {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
+/* Enhance VR toggle button */
+#toggle-vr-mode {
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+  box-shadow: 0 4px 15px rgba(124, 58, 237, 0.3);
+}
+
+#toggle-vr-mode:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(124, 58, 237, 0.4);
+}
+
+/* Loading state for VR mode */
+.vr-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 1.2rem;
+  background: rgba(0, 0, 0, 0.8);
+  padding: 1rem 2rem;
+  border-radius: 0.5rem;
+  display: none;
+}
+
+.vr-loading.active {
+  display: block;
+}
+
+/* VR mode indicator */
+.vr-mode-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: rgba(124, 58, 237, 0.9);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 2rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  z-index: 10;
+  display: none;
+}
+
+.vr-mode-indicator.active {
+  display: block;
+}
+
+/* Enhance transcription area for VR mode */
+.vr-mode .transcription-item {
+  background: rgba(124, 58, 237, 0.05);
+  border-left: 3px solid #7c3aed;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  #toggle-vr-mode {
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+  }
+
+  .vr-mode-indicator {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.75rem;
+  }
+}

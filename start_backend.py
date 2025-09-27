@@ -23,7 +23,7 @@ def main():
     
     print("🚀 Starting VR Flight Training Backend...")
     print(f"📁 Working directory: {backend_dir}")
-    print("🌐 Server will be available at: http://localhost:8000")
+    print("🌐 Web interface will be available at: http://localhost:8000/static")
     print("📖 API docs will be available at: http://localhost:8000/docs")
     print()
     

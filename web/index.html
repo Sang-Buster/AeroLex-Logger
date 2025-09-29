@@ -77,6 +77,21 @@
                   placeholder="Enter your student ID"
                 />
               </div>
+
+              <div id="admin-password-field" class="hidden">
+                <label
+                  for="admin-password"
+                  class="block text-sm font-medium text-gray-700"
+                  >Admin Password</label
+                >
+                <input
+                  id="admin-password"
+                  name="password"
+                  type="password"
+                  class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter admin password"
+                />
+              </div>
             </div>
 
             <!-- Error/Success Messages -->
@@ -388,6 +403,297 @@
         </main>
       </div>
 
+      <!-- Admin Dashboard -->
+      <div id="admin-screen" class="hidden min-h-screen">
+        <!-- Navigation Bar (same as main dashboard) -->
+        <nav class="bg-white shadow-sm border-b border-gray-200">
+          <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+              <div class="flex items-center">
+                <div class="flex-shrink-0 flex items-center">
+                  <div
+                    class="h-10 w-10 rounded-full flex items-center justify-center p-1"
+                  >
+                    <img
+                      src="assets/img/favicon.svg"
+                      alt="VR Flight Training"
+                      class="h-full w-full"
+                    />
+                  </div>
+                  <h1 class="ml-3 text-xl font-bold text-gray-900">
+                    AS 101: VR Flight Training - Admin
+                  </h1>
+                </div>
+              </div>
+
+              <div class="flex items-center space-x-4">
+                <div class="flex items-center space-x-3">
+                  <svg
+                    class="h-5 w-5 text-red-600"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                    />
+                  </svg>
+                  <div class="font-medium text-gray-900" id="nav-admin-name">
+                    Administrator
+                  </div>
+                </div>
+                <button
+                  id="admin-logout-btn"
+                  class="text-gray-400 hover:text-gray-600"
+                >
+                  <svg
+                    class="h-5 w-5"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                    />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Admin Content -->
+        <main class="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 min-h-screen">
+          <!-- Admin Overview -->
+          <div id="admin-overview-section" class="mb-8">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+              <div class="p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
+                  System Overview
+                </h3>
+
+                <!-- Admin Stats Grid -->
+                <div
+                  class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                  <div class="bg-blue-50 overflow-hidden rounded-lg">
+                    <div class="p-5">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                          <svg
+                            class="h-6 w-6 text-blue-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
+                            />
+                          </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                          <dl>
+                            <dt
+                              class="text-sm font-medium text-gray-500 truncate"
+                            >
+                              Total Students
+                            </dt>
+                            <dd
+                              class="text-lg font-medium text-gray-900"
+                              id="admin-total-students"
+                            >
+                              0
+                            </dd>
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-green-50 overflow-hidden rounded-lg">
+                    <div class="p-5">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                          <svg
+                            class="h-6 w-6 text-green-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                            />
+                          </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                          <dl>
+                            <dt
+                              class="text-sm font-medium text-gray-500 truncate"
+                            >
+                              Active Students
+                            </dt>
+                            <dd
+                              class="text-lg font-medium text-gray-900"
+                              id="admin-active-students"
+                            >
+                              0
+                            </dd>
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="bg-purple-50 overflow-hidden rounded-lg">
+                    <div class="p-5">
+                      <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                          <svg
+                            class="h-6 w-6 text-purple-600"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                          </svg>
+                        </div>
+                        <div class="ml-5 w-0 flex-1">
+                          <dl>
+                            <dt
+                              class="text-sm font-medium text-gray-500 truncate"
+                            >
+                              Class Average
+                            </dt>
+                            <dd
+                              class="text-lg font-medium text-gray-900"
+                              id="admin-class-average"
+                            >
+                              0%
+                            </dd>
+                          </dl>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Students Table -->
+          <div
+            id="admin-students-section"
+            class="bg-white overflow-hidden shadow rounded-lg"
+          >
+            <div class="p-6">
+              <div class="flex justify-between items-center mb-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">
+                  Students Database
+                </h3>
+                <button
+                  id="refresh-data-btn"
+                  class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <svg
+                    class="h-4 w-4 mr-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                    />
+                  </svg>
+                  Refresh
+                </button>
+              </div>
+
+              <!-- Students Table -->
+              <div class="overflow-x-auto">
+                <table
+                  class="min-w-full divide-y divide-gray-200"
+                  id="students-table"
+                >
+                  <thead class="bg-gray-50">
+                    <tr>
+                      <th
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Student
+                      </th>
+                      <th
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Progress
+                      </th>
+                      <th
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Score
+                      </th>
+                      <th
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Attempts
+                      </th>
+                      <th
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Time Spent
+                      </th>
+                      <th
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Audio Files
+                      </th>
+                      <th
+                        class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                      >
+                        Last Activity
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    id="students-table-body"
+                    class="bg-white divide-y divide-gray-200"
+                  >
+                    <!-- Students data will be loaded here -->
+                    <tr>
+                      <td
+                        colspan="7"
+                        class="px-6 py-4 text-center text-gray-500"
+                      >
+                        Loading students data...
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </main>
+      </div>
+
       <!-- Video Player Modal -->
       <div id="video-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div
@@ -625,6 +931,7 @@
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/dashboard.js"></script>
     <script src="assets/js/video.js"></script>
+    <script src="assets/js/admin.js"></script>
     <script src="assets/js/app.js"></script>
   </body>
 </html>

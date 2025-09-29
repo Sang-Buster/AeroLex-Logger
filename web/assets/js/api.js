@@ -56,18 +56,29 @@ class APIClient {
   /**
    * Authentication endpoints
    */
-  async login(name, studentId) {
+  async login(name, studentId, password = null) {
+    const requestBody = {
+      name: name.trim(),
+      student_id: studentId.trim(),
+    };
+
+    // Add password for admin login
+    if (password) {
+      requestBody.password = password;
+    }
+
     const response = await this.request("/api/v1/auth/login", {
       method: "POST",
-      body: JSON.stringify({
-        name: name.trim(),
-        student_id: studentId.trim(),
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (response.success) {
       this.currentStudent = response.student;
-      localStorage.setItem("currentStudent", JSON.stringify(response.student));
+      this.currentStudent.is_admin = response.is_admin;
+      localStorage.setItem(
+        "currentStudent",
+        JSON.stringify(this.currentStudent),
+      );
     }
 
     return response;
@@ -236,6 +247,36 @@ class APIClient {
   async getLiveTranscription(studentId) {
     return await this.request(
       `/api/v1/asr/student/${studentId}/live-transcription`,
+    );
+  }
+
+  /**
+   * Admin endpoints
+   */
+  async getAdminOverview(adminId) {
+    return await this.request(`/api/v1/admin/overview?admin_id=${adminId}`);
+  }
+
+  async getAllStudentsData(adminId) {
+    return await this.request(`/api/v1/admin/students?admin_id=${adminId}`);
+  }
+
+  async getStudentDetails(studentId, adminId) {
+    return await this.request(
+      `/api/v1/admin/student/${studentId}/details?admin_id=${adminId}`,
+    );
+  }
+
+  async getStudentAudio(studentId, audioFilename, adminId) {
+    return `${this.baseURL}/api/v1/admin/student/${studentId}/audio/${audioFilename}?admin_id=${adminId}`;
+  }
+
+  async deleteStudent(studentId, adminId) {
+    return await this.request(
+      `/api/v1/admin/student/${studentId}?admin_id=${adminId}`,
+      {
+        method: "DELETE",
+      },
     );
   }
 

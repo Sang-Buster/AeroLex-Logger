@@ -27,7 +27,11 @@ class AuthManager {
     this.loginForm = document.getElementById("login-form");
     this.loginScreen = document.getElementById("login-screen");
     this.dashboardScreen = document.getElementById("dashboard-screen");
+    this.adminScreen = document.getElementById("admin-screen");
     this.logoutBtn = document.getElementById("logout-btn");
+    this.adminLogoutBtn = document.getElementById("admin-logout-btn");
+    this.studentIdField = document.getElementById("student-id");
+    this.passwordField = document.getElementById("admin-password-field");
 
     if (!this.loginForm || !this.loginScreen || !this.dashboardScreen) {
       console.error("❌ Required DOM elements not found for AuthManager");
@@ -37,10 +41,34 @@ class AuthManager {
     // Setup form submission
     this.loginForm.addEventListener("submit", (e) => this.handleLogin(e));
 
-    // Setup logout
+    // Setup logout buttons
     if (this.logoutBtn) {
       this.logoutBtn.addEventListener("click", () => this.handleLogout());
     }
+    if (this.adminLogoutBtn) {
+      this.adminLogoutBtn.addEventListener("click", () => this.handleLogout());
+    }
+
+    // Show/hide password field based on student ID
+    if (this.studentIdField && this.passwordField) {
+      this.studentIdField.addEventListener("input", (e) => {
+        if (e.target.value.toLowerCase() === "admin") {
+          this.passwordField.classList.remove("hidden");
+          document.getElementById("admin-password").required = true;
+        } else {
+          this.passwordField.classList.add("hidden");
+          document.getElementById("admin-password").required = false;
+        }
+      });
+    } else {
+      console.error("❌ Student ID field or password field not found:", {
+        studentIdField: !!this.studentIdField,
+        passwordField: !!this.passwordField,
+      });
+    }
+
+    // Initialize form state
+    this.resetPasswordField();
 
     // Check if user is already logged in
     this.checkExistingSession();
@@ -53,15 +81,21 @@ class AuthManager {
       console.log("👤 Found existing session:", student);
 
       try {
-        // Validate session with backend
-        await window.api.validateStudent(student.student_id);
-        this.showDashboard(student);
+        // For admin, skip validation since it's session-based
+        if (student.is_admin) {
+          this.showAdminDashboard(student);
+        } else {
+          // Validate regular student session with backend
+          await window.api.validateStudent(student.student_id);
+          this.showDashboard(student);
+        }
       } catch (error) {
         console.warn("⚠️ Session validation failed:", error);
         this.showLogin();
         window.api.clearCurrentStudent();
       }
     } else {
+      console.log("👤 No existing session found, showing login");
       this.showLogin();
     }
   }
@@ -72,10 +106,22 @@ class AuthManager {
     const formData = new FormData(this.loginForm);
     const name = formData.get("name")?.trim();
     const studentId = formData.get("student_id")?.trim();
+    const password = formData.get("password")?.trim();
 
     // Validate inputs
     if (!name || !studentId) {
       this.showMessage("Please fill in all fields", "error");
+      return;
+    }
+
+    // Validate admin password if provided
+    if (password && studentId.toLowerCase() !== "admin") {
+      this.showMessage("Password is only for admin login", "error");
+      return;
+    }
+
+    if (studentId.toLowerCase() === "admin" && !password) {
+      this.showMessage("Admin password is required", "error");
       return;
     }
 
@@ -84,17 +130,21 @@ class AuthManager {
     this.showMessage("Logging in...", "info");
 
     try {
-      const response = await window.api.login(name, studentId);
+      const response = await window.api.login(name, studentId, password);
 
       if (response.success) {
         this.showMessage(
           response.message,
-          response.is_new ? "success" : "info",
+          response.is_admin ? "success" : response.is_new ? "success" : "info",
         );
 
         // Small delay to show the message
         setTimeout(() => {
-          this.showDashboard(response.student);
+          if (response.is_admin) {
+            this.showAdminDashboard(response.student);
+          } else {
+            this.showDashboard(response.student);
+          }
         }, 1000);
       } else {
         this.showMessage("Login failed", "error");
@@ -129,11 +179,17 @@ class AuthManager {
     if (this.loginScreen && this.dashboardScreen) {
       this.loginScreen.classList.remove("hidden");
       this.dashboardScreen.classList.add("hidden");
+      if (this.adminScreen) {
+        this.adminScreen.classList.add("hidden");
+      }
 
       // Clear form
       if (this.loginForm) {
         this.loginForm.reset();
       }
+
+      // Hide password field and reset requirements
+      this.resetPasswordField();
 
       // Clear any messages
       this.clearMessage();
@@ -142,10 +198,24 @@ class AuthManager {
     }
   }
 
+  resetPasswordField() {
+    if (this.passwordField) {
+      this.passwordField.classList.add("hidden");
+      const passwordInput = document.getElementById("admin-password");
+      if (passwordInput) {
+        passwordInput.required = false;
+        passwordInput.value = "";
+      }
+    }
+  }
+
   showDashboard(student) {
     if (this.loginScreen && this.dashboardScreen) {
       this.loginScreen.classList.add("hidden");
       this.dashboardScreen.classList.remove("hidden");
+      if (this.adminScreen) {
+        this.adminScreen.classList.add("hidden");
+      }
 
       // Update navigation with student info
       this.updateNavigation(student);
@@ -157,9 +227,30 @@ class AuthManager {
     }
   }
 
+  showAdminDashboard(admin) {
+    if (this.loginScreen && this.dashboardScreen && this.adminScreen) {
+      this.loginScreen.classList.add("hidden");
+      this.dashboardScreen.classList.add("hidden");
+      this.adminScreen.classList.remove("hidden");
+
+      // Update admin navigation
+      this.updateAdminNavigation(admin);
+
+      // Load admin dashboard data
+      window.admin?.loadAdminDashboard();
+
+      console.log("🔧 Showing admin dashboard for:", admin.name);
+    }
+  }
+
   updateNavigation(student) {
     const nameEl = document.getElementById("nav-student-name");
     if (nameEl) nameEl.textContent = student.name;
+  }
+
+  updateAdminNavigation(admin) {
+    const nameEl = document.getElementById("nav-admin-name");
+    if (nameEl) nameEl.textContent = admin.name;
   }
 
   setLoading(loading) {

@@ -16,7 +16,7 @@ sys.path.insert(0, str(project_root))
 import uvicorn  #noqa: E402
 
 # Import our modules
-from api.routes import asr, auth, students, videos  #noqa: E402
+from api.routes import admin, asr, auth, students, videos  #noqa: E402
 from database.sqlite_db import init_database  #noqa: E402
 from fastapi import FastAPI  #noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  #noqa: E402
@@ -81,6 +81,7 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["Authentication"])
 app.include_router(students.router, prefix="/api/v1/students", tags=["Students"])
 app.include_router(videos.router, prefix="/api/v1/videos", tags=["Videos"])
 app.include_router(asr.router, prefix="/api/v1/asr", tags=["ASR"])
+app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 
 # Static file serving
 web_directory = Path(__file__).parent.parent / "web"

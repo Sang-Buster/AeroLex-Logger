@@ -4,19 +4,30 @@ Authentication API Routes
 Simple authentication for local VR training application
 """
 
-from typing import Any, Dict
+import os
+from typing import Any, Dict, Optional
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, validator
 from services.student_service import StudentService
 from services.video_service import VideoService
 
+# Load environment variables from .env file
+load_dotenv()
+
 router = APIRouter()
 
+# Read from env
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+if not ADMIN_PASSWORD:
+    raise RuntimeError("ADMIN_PASSWORD is not set in .env file")
 
 class LoginRequest(BaseModel):
     name: str
     student_id: str
+    password: Optional[str] = None
     
     @validator('name')
     def validate_name(cls, v):
@@ -36,16 +47,46 @@ class LoginResponse(BaseModel):
     message: str
     student: Dict[str, Any]
     is_new: bool
+    is_admin: bool = False
 
 
 @router.post("/login", response_model=LoginResponse)
 async def login(request: LoginRequest):
     """
-    Login or register a student
-    For local application, this serves as both login and registration
+    Login or register a student / admin
+    For local application, this serves as both login and registration for students
+    Admin login requires special password
     """
     try:
-        # Register/login student
+        # Check if this is an admin login attempt
+        if request.student_id.lower() == "admin":
+            # Admin login requires password
+            if not request.password:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Admin password is required"
+                )
+            
+            # Validate admin credentials
+            if request.password == ADMIN_PASSWORD:
+                return LoginResponse(
+                    success=True,
+                    message="Admin login successful",
+                    student={
+                        "id": "admin",
+                        "name": request.name,
+                        "student_id": "admin"
+                    },
+                    is_new=False,
+                    is_admin=True
+                )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid admin credentials"
+                )
+        
+        # Regular student login/registration (non-admin)
         student_data = await StudentService.register_student(
             request.name, 
             request.student_id
@@ -66,7 +107,8 @@ async def login(request: LoginRequest):
                 "name": student_data['name'],
                 "student_id": student_data['student_id']
             },
-            is_new=student_data['is_new']
+            is_new=student_data['is_new'],
+            is_admin=False
         )
         
     except ValueError as e:
@@ -119,11 +161,12 @@ async def validate_student(student_id: str):
 @router.post("/logout/{student_id}")
 async def logout(student_id: str):
     """
-    Logout a student (update last active time)
+    Logout a student (don't update timestamp so they don't appear as active)
     """
     try:
-        from database.sqlite_db import DatabaseManager
-        await DatabaseManager.update_student_activity(student_id)
+        # Don't update last_active on logout to avoid showing as "active"
+        # The timestamp will represent their last actual activity, not logout time
+        print(f"👋 Student {student_id} logged out")
         
         return {
             "success": True,

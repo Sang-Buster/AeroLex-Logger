@@ -757,7 +757,8 @@
               <!-- Regular video player -->
               <video
                 id="video-player"
-                class="w-full aspect-video bg-black rounded-lg"
+                class="w-full bg-black rounded-lg"
+                style="max-height: 400px"
                 controls
                 preload="metadata"
                 crossorigin="anonymous"
@@ -831,7 +832,7 @@
               </h4>
               <div
                 id="live-transcript"
-                class="text-sm text-gray-600 min-h-[40px] max-h-32 overflow-y-auto"
+                class="text-sm text-gray-600 h-64 overflow-y-auto"
               >
                 <p class="text-gray-400">
                   Start speaking to see live transcription...
@@ -840,7 +841,7 @@
             </div>
 
             <!-- Controls -->
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-center mb-4">
               <div class="flex items-center space-x-4">
                 <button
                   id="start-recording"
@@ -869,16 +870,16 @@
                   </svg>
                   Stop Recording
                 </button>
-              </div>
 
-              <div
-                id="recording-status"
-                class="hidden flex items-center space-x-2"
-              >
                 <div
-                  class="animate-pulse h-2 w-2 bg-red-500 rounded-full"
-                ></div>
-                <span class="text-sm text-red-600">Recording...</span>
+                  id="recording-status"
+                  class="hidden flex items-center space-x-2"
+                >
+                  <div
+                    class="animate-pulse h-2 w-2 bg-red-500 rounded-full"
+                  ></div>
+                  <span class="text-sm text-red-600">Recording...</span>
+                </div>
               </div>
             </div>
 

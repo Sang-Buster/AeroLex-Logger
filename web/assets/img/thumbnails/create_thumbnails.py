@@ -2,7 +2,9 @@ import os
 import subprocess
 
 VIDEO_DIR = "/home/singsong/Desktop/flight_instructor/asr-pipeline/videos"
-THUMB_DIR = "/home/singsong/Desktop/flight_instructor/asr-pipeline/web/assets/img/thumbnails"
+THUMB_DIR = (
+    "/home/singsong/Desktop/flight_instructor/asr-pipeline/web/assets/img/thumbnails"
+)
 os.makedirs(THUMB_DIR, exist_ok=True)
 
 for filename in os.listdir(VIDEO_DIR):
@@ -12,8 +14,17 @@ for filename in os.listdir(VIDEO_DIR):
 
         # Extract frame at 5 seconds
         cmd = [
-            "ffmpeg", "-ss", "00:00:05", "-i", video_path,
-            "-frames:v", "1", "-q:v", "2", thumb_path, "-y"
+            "ffmpeg",
+            "-ss",
+            "00:00:05",
+            "-i",
+            video_path,
+            "-frames:v",
+            "1",
+            "-q:v",
+            "2",
+            thumb_path,
+            "-y",
         ]
         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 

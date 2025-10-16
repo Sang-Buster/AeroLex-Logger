@@ -56,9 +56,7 @@ else:
         VAD_ENGINE = "silero"
         print("🔧 Using Silero VAD")
     except ImportError:
-        print(
-            "ERROR: Silero VAD not found. Install with: pip install silero-vad torch"
-        )
+        print("ERROR: Silero VAD not found. Install with: pip install silero-vad torch")
         print("Make sure you have run install_windows.bat to set up dependencies.")
         sys.exit(1)
 
@@ -67,7 +65,7 @@ def detect_best_sample_rate(device_id=None):
     """Detect the best supported sample rate for the audio device."""
     # Preferred sample rates in order of preference
     preferred_rates = [48000, 44100, 22050, 16000, 8000]
-    
+
     for rate in preferred_rates:
         try:
             # Test if this sample rate works with the device
@@ -77,17 +75,17 @@ def detect_best_sample_rate(device_id=None):
                 dtype=np.float32,
                 device=device_id,
                 blocksize=512,
-                callback=lambda *args: None  # Dummy callback
+                callback=lambda *args: None,  # Dummy callback
             ):
                 print(f"✓ Using sample rate: {rate} Hz")
                 return rate
         except Exception:
             continue
-    
+
     # If nothing works, fall back to querying device info
     try:
         device_info = sd.query_devices(device_id)
-        default_rate = int(device_info['default_samplerate'])
+        default_rate = int(device_info["default_samplerate"])
         print(f"✓ Using device default sample rate: {default_rate} Hz")
         return default_rate
     except Exception:
@@ -136,10 +134,10 @@ def resample_audio(audio_data: np.ndarray, orig_sr: int, target_sr: int) -> np.n
     """Resample audio from original sample rate to target sample rate."""
     if orig_sr == target_sr:
         return audio_data
-    
+
     # Calculate resampling ratio
     num_samples = int(len(audio_data) * target_sr / orig_sr)
-    
+
     # Use scipy's resample function
     return scipy_signal.resample(audio_data, num_samples).astype(np.float32)
 
@@ -188,11 +186,9 @@ class AudioBuffer:
 
         # Resample for Silero VAD (it expects 16kHz)
         vad_audio = resample_audio(
-            np.array(self.silero_buffer, dtype=np.float32),
-            self.sample_rate,
-            16000
+            np.array(self.silero_buffer, dtype=np.float32), self.sample_rate, 16000
         )
-        
+
         # Convert to torch tensor and run VAD on resampled audio
         audio_tensor = torch.from_numpy(vad_audio)
         speech_timestamps = get_speech_timestamps(audio_tensor, self.vad)
@@ -275,14 +271,12 @@ class AudioBuffer:
                         if speech_duration >= Config.MIN_SPEECH_DURATION:
                             # Return the speech segment - resample for Whisper
                             audio_data = np.array(self.buffer, dtype=Config.DTYPE)
-                            
+
                             # Resample to Whisper's expected sample rate (16kHz)
                             whisper_audio = resample_audio(
-                                audio_data, 
-                                self.sample_rate, 
-                                self.whisper_sample_rate
+                                audio_data, self.sample_rate, self.whisper_sample_rate
                             )
-                            
+
                             start_time = self.speech_start_time
                             end_time = current_time
 
@@ -404,11 +398,11 @@ class ASRService:
     def __init__(self, audio_device_id=None):
         self.running = False
         self.audio_device_id = audio_device_id
-        
+
         # Detect and set the best sample rate for the audio device
         if Config.SAMPLE_RATE is None:
             Config.SAMPLE_RATE = detect_best_sample_rate(audio_device_id)
-        
+
         # Now initialize components that depend on Config.SAMPLE_RATE
         self.audio_buffer = AudioBuffer(sample_rate=Config.SAMPLE_RATE)
         self.transcriber = WhisperTranscriber()
@@ -510,7 +504,7 @@ class ASRService:
 
             # Convert float32 to int16 for WAV file
             audio_int16 = (audio_data * 32767).astype(np.int16)
-            
+
             # Use provided sample rate or default to Whisper sample rate
             save_sample_rate = sample_rate or Config.WHISPER_SAMPLE_RATE
 
@@ -538,7 +532,9 @@ class ASRService:
                 # Save audio segment if enabled
                 timestamp_str = datetime.now().isoformat()
                 # Save with Whisper sample rate since audio_data is resampled
-                audio_file = self._save_audio_segment(audio_data, timestamp_str, Config.WHISPER_SAMPLE_RATE)
+                audio_file = self._save_audio_segment(
+                    audio_data, timestamp_str, Config.WHISPER_SAMPLE_RATE
+                )
 
                 # Create log entry
                 log_entry = {
@@ -610,9 +606,15 @@ class ASRService:
             devices = sd.query_devices()
             input_devices = [d for d in devices if d["max_input_channels"] > 0]
             if input_devices:
-                device_to_use = self.audio_device_id if self.audio_device_id is not None else sd.default.device[0]
+                device_to_use = (
+                    self.audio_device_id
+                    if self.audio_device_id is not None
+                    else sd.default.device[0]
+                )
                 device_info = sd.query_devices(device_to_use)
-                print(f"🎙️  Using audio device: {device_info['name']} (Sample Rate: {Config.SAMPLE_RATE} Hz)")
+                print(
+                    f"🎙️  Using audio device: {device_info['name']} (Sample Rate: {Config.SAMPLE_RATE} Hz)"
+                )
             else:
                 print("⚠️  No audio input devices found!")
 
@@ -636,7 +638,6 @@ class ASRService:
         except Exception as e:
             logging.error(f"Audio capture failed: {e}")
             self.running = False
-
 
     def stop(self):
         """Stop the ASR service."""
@@ -683,7 +684,9 @@ def main():
             if device["max_input_channels"] > 0:
                 status = "📍 DEFAULT" if i == sd.default.device[0] else "  "
                 print(f"{status} [{i:2d}] {device['name']}")
-                print(f"      Channels: {device['max_input_channels']}, Sample Rate: {device['default_samplerate']}")
+                print(
+                    f"      Channels: {device['max_input_channels']}, Sample Rate: {device['default_samplerate']}"
+                )
         return
 
     # Override environment variables with command line args

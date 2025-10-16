@@ -11,9 +11,12 @@ class VideoPlayerManager {
     this.mediaRecorder = null;
     this.audioStream = null;
     this.transcriptionInterval = null;
+    this.hotkeyTranscriptionInterval = null;
     this.videoStartTime = null;
     this.isVRMode = false;
     this.vrVideo = null;
+    this.isHotkeyPressed = false;
+    this.useDualASR = true; // Use dual ASR system by default
     this.init();
   }
 
@@ -420,37 +423,27 @@ class VideoPlayerManager {
     if (!student || !this.currentVideo) return;
 
     try {
-      console.log("🎙️ Starting ASR recording");
+      console.log("🎙️ Starting live transcription display");
 
-      // Request microphone access
-      this.audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          channelCount: 1,
-          sampleRate: 16000,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      });
-
-      // Start ASR session
-      await window.api.startASRSession(
-        student.student_id,
-        this.currentVideo.id,
-        this.currentSession,
-      );
-
+      // Just start polling for transcriptions (ASR runs in background)
       // Setup UI for recording
       this.setRecordingState(true);
 
       // Start live transcription updates
       this.startLiveTranscription();
 
-      console.log("✅ Recording started");
+      console.log(
+        "✅ Live transcription started (ASR must be running in background)",
+      );
+      this.showNotification(
+        "Showing live transcriptions. Make sure ASR service is running: uv run start_vr_asr.py --student-id " +
+          student.student_id,
+        "info",
+      );
     } catch (error) {
       console.error("❌ Error starting recording:", error);
       this.showNotification(
-        "Failed to start recording. Please check microphone permissions.",
+        "Failed to start live transcription display.",
         "error",
       );
     }
@@ -459,14 +452,9 @@ class VideoPlayerManager {
   async stopRecording() {
     if (!this.isRecording) return;
 
-    console.log("🛑 Stopping ASR recording");
+    console.log("🛑 Stopping live transcription display");
 
-    // Stop media stream
-    if (this.audioStream) {
-      this.audioStream.getTracks().forEach((track) => track.stop());
-      this.audioStream = null;
-    }
-
+    // Just stop polling for transcriptions (ASR keeps running)
     // Stop live transcription
     this.stopLiveTranscription();
 
@@ -478,7 +466,9 @@ class VideoPlayerManager {
       this.showFinalEvaluation();
     }, 2000);
 
-    console.log("✅ Recording stopped");
+    console.log(
+      "✅ Live transcription stopped (ASR still running in background)",
+    );
   }
 
   toggleRecording() {

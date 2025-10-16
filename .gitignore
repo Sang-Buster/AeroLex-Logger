@@ -6,3 +6,4 @@ models/
 asr_sessions/
 **__pycache__**
 **.ruff_cache**
+*.db

@@ -18,17 +18,17 @@ repos:
         always_run: true
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: 'v0.11.11'
+    rev: 'v0.14.0'
     hooks:
-      - id: ruff
+      - id: ruff-check
         args: [--fix]
         name: ruff (check and fix)
         always_run: true
-      - id: ruff
+      - id: ruff-check
         args: [--select=I, --fix]
         name: ruff (import sorting)
         always_run: true
-      - id: ruff
+      - id: ruff-format
         name: ruff (format)
         always_run: true
 

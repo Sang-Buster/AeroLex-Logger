@@ -13,6 +13,7 @@ A robust, cross-platform automatic speech recognition (ASR) pipeline designed fo
 - **JSON Logging**: Structured output with timestamps and confidence scores
 - **ASR Evaluation**: Built-in tools for accuracy assessment with ground truth data
 - **Easy Deployment**: Simple setup for mass deployment across multiple systems
+- **Circular Buffer Recording**: Control+Backtick push-to-talk with 5s pre/post buffering (see [README_VR_TRAINING.md](README_VR_TRAINING.md))
 
 ## 🏗️ Architecture
 
@@ -26,32 +27,51 @@ Microphone → Audio Buffer → Silero VAD → Whisper large-v3-turbo → JSON L
 ## 📁 Project Structure
 
 ```
-asr-pipeline/
-├── .venv/                    # Virtual environment
-├── audios/                   # Saved audio segments (WAV files)
-├── logs/                     # Log output directory
-│   ├── asr_results.jsonl           # Transcription results
-│   ├── asr.out                     # Service stdout logs
-│   └── asr.err                     # Service error logs
-├── models/                   # Whisper models (auto-downloaded)
-├── src/                      # Core Python scripts
-│   ├── asr_service.py              # Main service script
-│   ├── download_model.py           # Model download and verification
-│   ├── asr_evaluate.py             # ASR evaluation and accuracy metrics
-│   ├── test_installation.py        # Installation verification
-│   ├── test_audio.py               # Audio debugging utilities
-│   └── ground_truth.txt            # Example ground truth for evaluation
-├── .gitignore                # Git ignore file
-├── .pre-commit-config.yaml   # Pre-commit configuration
-├── .python-version           # Python version
-├── ASR_EVALUATION_METRICS.md       # ASR evaluation metrics documentation
-├── asr.service                     # Linux systemd unit file
-├── asr.service.bat                 # Windows service runner
-├── install_linux.sh                # Linux installation script
-├── install_windows.bat             # Windows installation script
-├── pyproject.toml            # Python project configuration and dependencies
-├── README.md                 # This file
-└── uv.lock                   # uv lock file
+📦aerolex-logger
+ ┣ 📂audios                             # Saved audio segments (WAV files)
+ ┣ 📂backend                            # FastAPI backend
+ ┃ ┣ 📂api                              # API routes
+ ┃ ┣ 📂database                         # Database models and connection
+ ┃ ┣ 📂services                         # Business logic services
+ ┃ ┣ 📂static                           # Static files served by backend
+ ┃ ┗ 📄main.py                          # Backend server entry point
+ ┣ 📂data                               # Application data directory
+ ┃ ┣ 📂asr_sessions                     # ASR session data
+ ┃ ┣ 📂ground_truth                     # Ground truth data files
+ ┃ ┣ 📄ground_truth.txt                 # Ground truth text for evaluation
+ ┃ ┗ 📄vr_training.db                   # SQLite database for VR training
+ ┣ 📂logs                               # Log output directory
+ ┣ 📂models                             # Whisper models (auto-downloaded)
+ ┣ 📂src                                # Core Python scripts
+ ┃ ┣ 📄asr_evaluate.py                  # ASR evaluation and accuracy metrics
+ ┃ ┣ 📄asr_service.py                   # ASR service script
+ ┃ ┣ 📄asr_service_buffered.py          # ASR with circular buffer
+ ┃ ┣ 📄asr_service_vr.py                # ASR service for VR training
+ ┃ ┣ 📄download_model.py                # Model download and verification
+ ┃ ┣ 📄test_audio.py                    # Audio debugging utilities
+ ┃ ┣ 📄test_backend.py                  # Backend testing utilities
+ ┃ ┣ 📄test_cleanup_videos_names.py     # Video filename cleanup utility
+ ┃ ┗ 📄test_installation.py             # Installation verification
+ ┣ 📂videos                             # Video files directory
+ ┣ 📂web                                # Web interface
+ ┃ ┣ 📂assets                           # Web assets
+ ┃ ┃ ┣ 📂css                            # Stylesheets
+ ┃ ┃ ┣ 📂img                            # Images
+ ┃ ┃ ┗ 📂js                             # JavaScript files
+ ┃ ┗ 📄index.html                       # Main web page
+ ┣ 📄.env.example                       # Example environment variables
+ ┣ 📄.gitignore                         # Git ignore file
+ ┣ 📄.pre-commit-config.yaml            # Pre-commit configuration
+ ┣ 📄.python-version                    # Python version
+ ┣ 📄README.md                          # Project documentation
+ ┣ 📄asr.service                        # Linux systemd unit file
+ ┣ 📄asr.service.bat                    # Windows service runner
+ ┣ 📄install_linux.sh                   # Linux installation script
+ ┣ 📄install_windows.bat                # Windows installation script
+ ┣ 📄pyproject.toml                     # Python project configuration and dependencies
+ ┣ 📄start_backend.py                   # Backend startup script
+ ┣ 📄start_vr_asr.py                    # VR ASR service startup script
+ ┗ 📄uv.lock                            # uv lock file
 ```
 
 ## 🚀 Quick Start
@@ -198,10 +218,10 @@ Compare your ASR results against ground truth:
 
 ```bash
 # Basic evaluation
-uv run src/asr_evaluate.py src/ground_truth.txt logs/asr_results.jsonl
+uv run src/asr_evaluate.py data/ground_truth.txt logs/asr_results.jsonl
 
 # With detailed output and custom threshold
-uv run src/asr_evaluate.py src/ground_truth.txt logs/asr_results.jsonl -o detailed_results.json -t 0.4
+uv run src/asr_evaluate.py data/ground_truth.txt logs/asr_results.jsonl -o detailed_results.json -t 0.4
 ```
 
 #### 2. Direct Text Comparison
@@ -447,12 +467,12 @@ tail -f logs/asr_results.jsonl | jq '.transcript'
 
 ```bash
 # Regular accuracy assessment
-uv run src/asr_evaluate.py src/ground_truth.txt logs/asr_results.jsonl -o daily_eval.json
+uv run src/asr_evaluate.py data/ground_truth.txt logs/asr_results.jsonl -o daily_eval.json
 
 # Track accuracy over time
 for file in logs/asr_results_*.jsonl; do
   echo "Evaluating $file"
-  uv run src/asr_evaluate.py src/ground_truth.txt "$file"
+  uv run src/asr_evaluate.py data/ground_truth.txt "$file"
 done
 ```
 

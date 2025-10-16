@@ -251,6 +251,29 @@ class APIClient {
   }
 
   /**
+   * Buffered ASR endpoints (Circular Buffer with Control+Backtick)
+   */
+  async startBufferedRecording(studentId, videoId, sessionId = null) {
+    return await this.request("/api/v1/asr/start-buffered-recording", {
+      method: "POST",
+      body: JSON.stringify({
+        student_id: studentId,
+        video_id: videoId,
+        session_id: sessionId,
+      }),
+    });
+  }
+
+  async stopBufferedRecording(studentId) {
+    return await this.request(
+      `/api/v1/asr/stop-buffered-recording?student_id=${studentId}`,
+      {
+        method: "POST",
+      },
+    );
+  }
+
+  /**
    * Admin endpoints
    */
   async getAdminOverview(adminId) {

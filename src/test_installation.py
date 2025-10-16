@@ -176,21 +176,23 @@ def test_vad_engine():
         # Test basic functionality
         model = load_silero_vad()  # Test loading
         print("✓ Silero VAD is working")
-        
+
         # Test with dummy audio
         import numpy as np
         import torch
-        
+
         # Create 1 second of dummy audio
         dummy_audio = torch.from_numpy(np.random.randn(16000).astype(np.float32))
         from silero_vad import get_speech_timestamps
-        
+
         # This should run without error
         timestamps = get_speech_timestamps(dummy_audio, model)
-        print(f"✓ VAD inference test passed (detected {len(timestamps)} segments in dummy audio)")
-        
+        print(
+            f"✓ VAD inference test passed (detected {len(timestamps)} segments in dummy audio)"
+        )
+
         return True
-        
+
     except ImportError:
         print("✗ Silero VAD not available")
         print("  Install with: pip install silero-vad torch")
@@ -297,7 +299,7 @@ def main():
 
         if not results.get("Whisper Model", False):
             print("💡 Try: uv run src/download_model.py")
-            
+
         if not results.get("VAD Engine", False):
             print("💡 Try: uv add silero-vad torch")
 

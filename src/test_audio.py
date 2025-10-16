@@ -122,13 +122,15 @@ def test_vad_engine(audio_data):
             print(
                 f"Silero VAD: {len(speech_timestamps)} speech segments, {speech_percentage:.1f}% speech"
             )
-            
+
             # Show individual segments
             for i, (start, end) in enumerate(speech_timestamps[:5]):  # Show first 5
                 duration = (end - start) / 16000  # Convert samples to seconds
                 start_time = start / 16000
-                print(f"  Segment {i+1}: {start_time:.2f}s - {start_time + duration:.2f}s ({duration:.2f}s)")
-            
+                print(
+                    f"  Segment {i + 1}: {start_time:.2f}s - {start_time + duration:.2f}s ({duration:.2f}s)"
+                )
+
             if len(speech_timestamps) > 5:
                 print(f"  ... and {len(speech_timestamps) - 5} more segments")
         else:

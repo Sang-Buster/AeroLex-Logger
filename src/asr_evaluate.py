@@ -47,14 +47,72 @@ def levenshtein_distance(s1: str, s2: str) -> int:
     return previous_row[-1]
 
 
+def normalize_aviation_numbers(text: str) -> str:
+    """
+    Normalize aviation-specific number formats.
+    Examples:
+    - "four eighty-one" or "four eighty one" -> "481"
+    - "four eight one" -> "481"
+    - "one two three" -> "123"
+    """
+    # Number word to digit mapping
+    number_words = {
+        "zero": "0",
+        "one": "1",
+        "two": "2",
+        "three": "3",
+        "four": "4",
+        "five": "5",
+        "six": "6",
+        "seven": "7",
+        "eight": "8",
+        "nine": "9",
+    }
+
+    # Replace number words with digits
+    words = text.split()
+    result = []
+    i = 0
+
+    while i < len(words):
+        word = words[i].lower().strip()
+
+        # Check if it's a number word
+        if word in number_words:
+            # Collect consecutive number words
+            number_sequence = []
+            while i < len(words) and words[i].lower().strip() in number_words:
+                number_sequence.append(number_words[words[i].lower().strip()])
+                i += 1
+
+            # Join the digits
+            result.append("".join(number_sequence))
+        else:
+            result.append(words[i])
+            i += 1
+
+    return " ".join(result)
+
+
 def normalize_text(text: str) -> str:
     """Normalize text for comparison by removing punctuation and converting to lowercase."""
     # Convert to lowercase
     text = text.lower()
-    # Remove punctuation and extra whitespace
+
+    # Normalize aviation-specific number formats first
+    text = normalize_aviation_numbers(text)
+
+    # Remove hyphens and dashes (so "V-F-R" becomes "VFR")
+    text = text.replace("-", "")
+    text = text.replace("–", "")
+    text = text.replace("—", "")
+
+    # Remove punctuation except spaces
     text = re.sub(r"[^\w\s]", "", text)
+
     # Normalize whitespace
     text = " ".join(text.split())
+
     return text
 
 

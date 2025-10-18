@@ -1,10 +1,11 @@
-Deland traffic Cessna 123 Alpha Bravo entering left downwind runway 23
-Deland traffic Cessna 123 Alpha Bravo turning left base runway 23
-Deland traffic Cessna 123 Alpha Bravo turning final runway 23 full stop
-Deland traffic Cessna 123 Alpha Bravo clear of runway 23 taxiing to parking
-Deland traffic Cessna 123 Alpha Bravo back taxi runway 23 for departure
-Deland traffic Cessna 123 Alpha Bravo departing runway 23 left traffic
-Deland traffic Cessna 123 Alpha Bravo crosswind runway 23
-Deland traffic Cessna 123 Alpha Bravo turning left downwind runway 23
-Deland traffic Cessna 123 Alpha Bravo turning left base runway 23 touch and go
-Deland traffic Cessna 123 Alpha Bravo short final runway 23 touch and go
+Deland traffic, Skyhawk four eighty-one echo romeo, five miles north of the airport, request traffic advisory.
+---
+Deland traffic, Skyhawk four eighty-one echo romeo, left downwind, traffic patterns making left traffic, runway one two, following traffic on final, Deland.
+---
+Deland traffic, Skyhawk four eighty-one echo romeo, upwind, runway one two, left traffic, Deland.
+---
+Deland traffic, Skyhawk four eighty-one echo romeo, left downwind, runway one two, Deland.
+---
+Deland traffic, Skyhawk four eighty-one echo romeo, midfield left downwind, runway one two, Deland.
+---
+Deland traffic, Skyhawk four eighty-one echo romeo, turning left base to final, runway one two, Deland.

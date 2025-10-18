@@ -106,15 +106,21 @@ async def submit_asr_result(
 ):
     """Submit an ASR transcription result for evaluation"""
     try:
-        # Get ground truth for the video
-        ground_truth = await VideoService.get_video_ground_truth(request.video_id)
+        # Get ground truth messages for the video
+        ground_truth_messages = await VideoService.get_video_ground_truth(
+            request.video_id
+        )
 
         # Evaluate the transcription if we have ground truth
         evaluation_results = None
-        if ground_truth and request.transcript.strip():
+        ground_truth_text = None
+
+        if ground_truth_messages and request.transcript.strip():
             evaluation_results = await evaluate_transcription(
-                request.transcript, ground_truth
+                request.transcript, ground_truth_messages
             )
+            # Join messages for storage (legacy compatibility)
+            ground_truth_text = "\n---\n".join(ground_truth_messages)
 
         # Prepare ASR result data
         asr_data = {
@@ -122,7 +128,7 @@ async def submit_asr_result(
             "student_id": request.student_id,
             "video_id": request.video_id,
             "transcript": request.transcript,
-            "ground_truth": ground_truth,
+            "ground_truth": ground_truth_text,
             "confidence": request.confidence,
             "audio_file_path": request.audio_file_path,
         }
@@ -140,8 +146,9 @@ async def submit_asr_result(
         # Save to database
         asr_result_id = await DatabaseManager.save_asr_result(asr_data)
 
-        # Update student progress if we have a good similarity score
-        if evaluation_results and evaluation_results["similarity"] > 0.7:
+        # Update student progress - always update, even with low scores
+        # The unlock logic is now based on time spent, not score threshold
+        if evaluation_results:
             background_tasks.add_task(
                 StudentService.update_video_progress,
                 request.student_id,
@@ -161,11 +168,20 @@ async def submit_asr_result(
         # Add evaluation results to response
         if evaluation_results:
             response_data["evaluation"] = evaluation_results
+            # Add matched_ground_truth to top level for frontend display
+            response_data["matched_ground_truth"] = evaluation_results.get(
+                "matched_ground_truth", ""
+            )
+            response_data["similarity_score"] = evaluation_results["similarity"]
+            response_data["wer"] = evaluation_results["wer"]
 
         return response_data
 
     except Exception as e:
         print(f"❌ Error submitting ASR result: {e}")
+        import traceback
+
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to process ASR result",
@@ -176,12 +192,19 @@ async def submit_asr_result(
 async def evaluate_transcript(request: EvaluationRequest):
     """Evaluate a transcript against ground truth"""
     try:
-        # Get ground truth if not provided
-        ground_truth = request.ground_truth
-        if not ground_truth:
-            ground_truth = await VideoService.get_video_ground_truth(request.video_id)
+        # Get ground truth messages if not provided
+        ground_truth_messages = None
+        if request.ground_truth:
+            # Split provided ground truth by delimiter
+            ground_truth_messages = [
+                msg.strip() for msg in request.ground_truth.split("---") if msg.strip()
+            ]
+        else:
+            ground_truth_messages = await VideoService.get_video_ground_truth(
+                request.video_id
+            )
 
-        if not ground_truth:
+        if not ground_truth_messages:
             return {
                 "success": False,
                 "message": "No ground truth available for this video",
@@ -190,18 +213,22 @@ async def evaluate_transcript(request: EvaluationRequest):
 
         # Perform evaluation
         evaluation_results = await evaluate_transcription(
-            request.transcript, ground_truth
+            request.transcript, ground_truth_messages
         )
 
         return {
             "success": True,
             "transcript": request.transcript,
-            "ground_truth": ground_truth,
+            "ground_truth_messages": ground_truth_messages,
+            "matched_ground_truth": evaluation_results.get("matched_ground_truth", ""),
             "evaluation": evaluation_results,
         }
 
     except Exception as e:
         print(f"❌ Error evaluating transcript: {e}")
+        import traceback
+
+        traceback.print_exc()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to evaluate transcript",
@@ -219,7 +246,9 @@ async def get_session_results(session_id: str):
             )
 
         async with await DatabaseManager.get_connection() as db:
-            db.row_factory = db.Row
+            import aiosqlite
+
+            db.row_factory = aiosqlite.Row
 
             # First check if the table exists
             async with db.execute("""
@@ -246,11 +275,37 @@ async def get_session_results(session_id: str):
             ) as cursor:
                 results = await cursor.fetchall()
 
+                # Process results to add matched_ground_truth
+                processed_results = []
+                for row in results:
+                    result_dict = dict(row)
+
+                    # Re-evaluate to get matched message if we have ground truth
+                    if result_dict.get("ground_truth") and result_dict.get(
+                        "transcript"
+                    ):
+                        ground_truth_messages = result_dict["ground_truth"].split(
+                            "\n---\n"
+                        )
+                        ground_truth_messages = [
+                            msg.strip() for msg in ground_truth_messages if msg.strip()
+                        ]
+
+                        if ground_truth_messages:
+                            eval_result = await evaluate_transcription(
+                                result_dict["transcript"], ground_truth_messages
+                            )
+                            result_dict["matched_ground_truth"] = eval_result.get(
+                                "matched_ground_truth", ""
+                            )
+
+                    processed_results.append(result_dict)
+
                 return {
                     "success": True,
                     "session_id": session_id,
-                    "results": [dict(row) for row in results] if results else [],
-                    "count": len(results) if results else 0,
+                    "results": processed_results,
+                    "count": len(processed_results),
                 }
 
     except HTTPException:
@@ -424,6 +479,15 @@ async def start_buffered_recording(request: ASRSessionRequest):
         audio_dir.mkdir(parents=True, exist_ok=True)
         logs_dir.mkdir(parents=True, exist_ok=True)
 
+        # Remove any existing stop flag from previous session
+        stop_flag_file = logs_dir / ".asr_stop_recording"
+        if stop_flag_file.exists():
+            try:
+                stop_flag_file.unlink()
+                print(f"🗑️ Removed previous stop flag: {stop_flag_file}")
+            except Exception as e:
+                print(f"⚠️ Error removing stop flag: {e}")
+
         # Create session config
         session_config = {
             "student_id": student_id,
@@ -504,6 +568,16 @@ async def stop_buffered_recording(student_id: str):
     import signal
 
     try:
+        # First, create stop flag to prevent further transcription writes
+        student_logs_dir = await StudentService.get_student_logs_dir(student_id)
+        stop_flag_file = student_logs_dir / ".asr_stop_recording"
+
+        try:
+            stop_flag_file.touch()
+            print(f"🛑 Created stop flag: {stop_flag_file}")
+        except Exception as e:
+            print(f"⚠️ Error creating stop flag: {e}")
+
         if student_id not in _asr_processes:
             # Use pkill to kill any orphaned processes
             try:
@@ -517,7 +591,7 @@ async def stop_buffered_recording(student_id: str):
 
             return {
                 "success": True,
-                "message": "No tracked process (cleaned up orphans)",
+                "message": "No tracked process (cleaned up orphans and set stop flag)",
                 "student_id": student_id,
             }
 
@@ -596,51 +670,124 @@ async def store_asr_session_config(config: Dict[str, Any]):
         json.dump(config, f, indent=2)
 
 
-async def evaluate_transcription(transcript: str, ground_truth: str) -> Dict[str, Any]:
-    """Evaluate a transcription against ground truth using the existing ASR evaluation module"""
+async def evaluate_transcription(
+    transcript: str, ground_truth_messages: list
+) -> Dict[str, Any]:
+    """Evaluate a transcription against ground truth using Levenshtein similarity per message"""
     try:
         # Import the evaluation functions
-        from asr_evaluate import evaluate_single_pair
+        from asr_evaluate import levenshtein_distance, normalize_text
 
-        # Perform evaluation
-        evaluation = evaluate_single_pair(ground_truth, transcript)
+        # Find best matching message using Levenshtein similarity
+        normalized_transcript = normalize_text(transcript)
+        best_match_index = -1
+        best_similarity = 0.0
+        best_ground_truth = ""
+
+        per_message_scores = []
+
+        for idx, gt_message in enumerate(ground_truth_messages):
+            normalized_gt = normalize_text(gt_message)
+
+            # Calculate Levenshtein similarity (0 to 1 scale)
+            max_len = max(len(normalized_gt), len(normalized_transcript))
+            if max_len == 0:
+                similarity = 1.0
+            else:
+                edit_distance = levenshtein_distance(
+                    normalized_gt, normalized_transcript
+                )
+                similarity = 1.0 - (edit_distance / max_len)
+
+            per_message_scores.append(
+                {
+                    "message_index": idx,
+                    "message": gt_message,
+                    "similarity": round(similarity, 4),
+                }
+            )
+
+            # Track best match
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_match_index = idx
+                best_ground_truth = gt_message
+
+        # Calculate overall metrics using best match
+        if best_ground_truth:
+            normalized_gt = normalize_text(best_ground_truth)
+            max_len = max(len(normalized_gt), len(normalized_transcript))
+
+            if max_len == 0:
+                wer = 0.0
+                cer = 0.0
+                edit_distance = 0
+            else:
+                edit_distance = levenshtein_distance(
+                    normalized_gt, normalized_transcript
+                )
+                # Approximate WER and CER from Levenshtein
+                wer = edit_distance / max_len
+                cer = edit_distance / max_len
+        else:
+            wer = 1.0
+            cer = 1.0
+            edit_distance = len(normalized_transcript)
+            best_ground_truth = ""
 
         return {
-            "wer": evaluation["wer"],
-            "cer": evaluation["cer"],
-            "word_accuracy": evaluation["word_accuracy"],
-            "char_accuracy": evaluation["char_accuracy"],
-            "similarity": evaluation["similarity"],
-            "edit_distance": evaluation["edit_distance"],
+            "wer": round(wer, 4),
+            "cer": round(cer, 4),
+            "word_accuracy": round(1.0 - wer, 4),
+            "char_accuracy": round(1.0 - cer, 4),
+            "similarity": round(best_similarity, 4),
+            "edit_distance": edit_distance,
+            "matched_message_index": best_match_index,
+            "matched_ground_truth": best_ground_truth,
+            "per_message_scores": per_message_scores,
         }
 
     except ImportError as e:
         print(f"❌ Error importing ASR evaluation: {e}")
         # Fallback to simple similarity calculation
+        import re
         from difflib import SequenceMatcher
 
         def normalize_text(text):
-            import re
-
             text = text.lower()
             text = re.sub(r"[^\w\s]", "", text)
             return " ".join(text.split())
 
-        similarity = SequenceMatcher(
-            None, normalize_text(ground_truth), normalize_text(transcript)
-        ).ratio()
+        # Find best match using SequenceMatcher
+        normalized_transcript = normalize_text(transcript)
+        best_similarity = 0.0
+        best_ground_truth = ""
+
+        for gt_message in ground_truth_messages:
+            normalized_gt = normalize_text(gt_message)
+            similarity = SequenceMatcher(
+                None, normalized_gt, normalized_transcript
+            ).ratio()
+
+            if similarity > best_similarity:
+                best_similarity = similarity
+                best_ground_truth = gt_message
 
         return {
-            "wer": 1.0 - similarity,  # Approximation
-            "cer": 1.0 - similarity,  # Approximation
-            "word_accuracy": similarity,
-            "char_accuracy": similarity,
-            "similarity": similarity,
-            "edit_distance": 0,  # Not calculated in fallback
+            "wer": round(1.0 - best_similarity, 4),
+            "cer": round(1.0 - best_similarity, 4),
+            "word_accuracy": round(best_similarity, 4),
+            "char_accuracy": round(best_similarity, 4),
+            "similarity": round(best_similarity, 4),
+            "edit_distance": 0,
+            "matched_ground_truth": best_ground_truth,
         }
 
     except Exception as e:
         print(f"❌ Error in transcript evaluation: {e}")
+        import traceback
+
+        traceback.print_exc()
         return {
             "wer": 1.0,
             "cer": 1.0,
@@ -648,4 +795,5 @@ async def evaluate_transcription(transcript: str, ground_truth: str) -> Dict[str
             "char_accuracy": 0.0,
             "similarity": 0.0,
             "edit_distance": len(transcript),
+            "matched_ground_truth": "",
         }

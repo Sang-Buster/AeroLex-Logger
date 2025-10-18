@@ -395,14 +395,21 @@ class VRASRService:
             log_file = Path(VRConfig.LOGS_DIR) / "asr_results.jsonl"
             service_log = Path(VRConfig.LOGS_DIR) / "asr.out"
             error_log = Path(VRConfig.LOGS_DIR) / "asr.err"
+            self.stop_flag_file = Path(VRConfig.LOGS_DIR) / ".asr_stop_recording"
         else:
             # Fallback to default logs
             Path("logs").mkdir(exist_ok=True)
             log_file = Path("logs/asr_results.jsonl")
             service_log = Path("logs/asr.out")
             error_log = Path("logs/asr.err")
+            self.stop_flag_file = Path("logs/.asr_stop_recording")
 
         self.log_file = str(log_file)
+
+        # Remove any existing stop flag from previous session
+        if self.stop_flag_file.exists():
+            self.stop_flag_file.unlink()
+            logging.info("Removed previous stop flag")
 
         # Configure logging
         logging.basicConfig(
@@ -501,9 +508,21 @@ class VRASRService:
     ):
         """Transcribe audio and submit to backend."""
         try:
+            # Check if recording has been stopped
+            if self.stop_flag_file.exists():
+                print("🛑 Stop recording flag detected - skipping transcription")
+                logging.info("Stop recording flag detected - skipping transcription")
+                return
+
             transcript, confidence = self.transcriber.transcribe(audio_data)
 
             if transcript:
+                # Double-check flag before writing (in case it was set during transcription)
+                if self.stop_flag_file.exists():
+                    print("🛑 Stop recording flag detected - not writing to log")
+                    logging.info("Stop recording flag detected - not writing to log")
+                    return
+
                 timestamp_str = datetime.now().isoformat()
                 audio_file = self._save_audio_segment(audio_data, timestamp_str)
 
@@ -528,6 +547,11 @@ class VRASRService:
                 with jsonlines.open(self.log_file, mode="a") as writer:
                     writer.write(log_entry)
 
+                # Submit to backend API for evaluation and database storage
+                self._submit_to_backend(
+                    transcript, confidence, audio_file, timestamp_str
+                )
+
                 # Print result
                 print(f"📝 [{confidence:.3f}] {transcript}")
                 logging.info(f"Transcribed ({confidence:.3f}): {transcript}")
@@ -536,6 +560,113 @@ class VRASRService:
 
         except Exception as e:
             logging.error(f"Error in transcription: {e}")
+
+    def _submit_to_backend(
+        self,
+        transcript: str,
+        confidence: float,
+        audio_file: Optional[str],
+        timestamp: str,
+    ):
+        """Submit transcription result to backend API for evaluation"""
+        try:
+            import requests
+
+            # Only submit if we have session info
+            if (
+                not VRConfig.SESSION_ID
+                or not VRConfig.STUDENT_ID
+                or not VRConfig.VIDEO_ID
+            ):
+                return
+
+            api_url = "http://127.0.0.1:8000/api/v1/asr/submit-result"
+
+            payload = {
+                "session_id": VRConfig.SESSION_ID,
+                "student_id": VRConfig.STUDENT_ID,
+                "video_id": VRConfig.VIDEO_ID,
+                "transcript": transcript,
+                "confidence": confidence,
+                "audio_file_path": audio_file,
+            }
+
+            # Submit asynchronously (don't block transcription)
+            response = requests.post(api_url, json=payload, timeout=2)
+
+            if response.status_code == 200:
+                result = response.json()
+                if result.get("evaluation"):
+                    eval_data = result["evaluation"]
+                    similarity = eval_data.get("similarity", 0)
+                    wer = eval_data.get("wer", 0)
+                    matched_ground_truth = eval_data.get("matched_ground_truth", "")
+                    print(
+                        f"📊 Evaluation: {round(similarity * 100)}% similarity, {round(wer * 100)}% WER"
+                    )
+
+                    # Update the JSONL with evaluation results
+                    self._update_jsonl_with_evaluation(
+                        timestamp, similarity, wer, matched_ground_truth
+                    )
+            else:
+                logging.warning(f"Failed to submit to backend: {response.status_code}")
+
+        except Exception as e:
+            # Don't fail if API submission fails
+            logging.warning(f"Could not submit to backend API: {e}")
+
+    def _update_jsonl_with_evaluation(
+        self,
+        timestamp: str,
+        similarity: float,
+        wer: float,
+        matched_ground_truth: str = "",
+    ):
+        """Update the JSONL entry with evaluation results"""
+        try:
+            print(f"🔄 Updating JSONL for timestamp: {timestamp}")
+            # Read all entries
+            entries = []
+            with jsonlines.open(self.log_file, mode="r") as reader:
+                for entry in reader:
+                    entries.append(entry)
+
+            print(f"📖 Read {len(entries)} entries from JSONL")
+
+            # Update the entry with matching timestamp
+            updated = False
+            for entry in entries:
+                if entry.get("timestamp") == timestamp:
+                    entry["similarity_score"] = round(similarity, 4)
+                    entry["wer"] = round(wer, 4)
+                    if matched_ground_truth:
+                        entry["matched_ground_truth"] = matched_ground_truth
+                    updated = True
+                    print(
+                        f"✅ Updated entry: similarity={round(similarity, 4)}, wer={round(wer, 4)}"
+                    )
+                    break
+
+            if not updated:
+                print(f"⚠️ No entry found with timestamp: {timestamp}")
+                print(
+                    f"Available timestamps: {[e.get('timestamp') for e in entries[-3:]]}"
+                )
+
+            # Rewrite the file if we updated an entry
+            if updated:
+                with jsonlines.open(self.log_file, mode="w") as writer:
+                    for entry in entries:
+                        writer.write(entry)
+                print("💾 JSONL file updated with evaluation scores")
+                logging.info(
+                    f"Updated JSONL with evaluation: {round(similarity * 100)}% similarity"
+                )
+
+        except Exception as e:
+            print(f"❌ Error updating JSONL: {e}")
+            logging.warning(f"Could not update JSONL with evaluation: {e}")
 
     def start(self):
         """Start the VR ASR service."""

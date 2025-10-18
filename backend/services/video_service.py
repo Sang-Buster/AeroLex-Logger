@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from database.sqlite_db import DatabaseManager
+from services.evaluation_service import summarize_scores_by_video
 
 
 class VideoService:
@@ -183,9 +184,33 @@ class VideoService:
             student_id
         )
 
+        # Preload ground truth for the student's videos and build scoring summary
+        ground_truth_cache: Dict[str, List[str]] = {}
+        for video in videos_with_progress:
+            messages = await VideoService.get_video_ground_truth(video["id"])
+            ground_truth_cache[video["id"]] = messages or []
+
+        def fetch_ground_truth(video_id: str) -> List[str]:
+            return ground_truth_cache.get(video_id, [])
+
+        asr_results = await DatabaseManager.get_student_asr_results(student_id)
+        score_summary = summarize_scores_by_video(asr_results, fetch_ground_truth)
+
         result = []
         for video in videos_with_progress:
             # Convert None values to appropriate defaults
+            time_spent_seconds = int(video.get("time_spent_seconds") or 0)
+            time_spent_minutes = (
+                round(time_spent_seconds / 60, 1) if time_spent_seconds > 0 else 0
+            )
+            summary = score_summary.get(video["id"])
+            if summary:
+                avg_score = float(summary.get("average", 0.0))
+                matched_messages = len(summary.get("message_scores", {}))
+            else:
+                avg_score = float(video.get("best_score") or 0.0)
+                matched_messages = 0
+
             result.append(
                 {
                     "id": video["id"],
@@ -196,9 +221,13 @@ class VideoService:
                     "duration": video["duration"],
                     "unlocked": bool(video.get("unlocked") or False),
                     "completed": bool(video.get("completed") or False),
-                    "best_score": float(video.get("best_score") or 0.0),
+                    "best_score": avg_score,
+                    "average_score": avg_score,
+                    "matched_messages": matched_messages,
                     "attempts": int(video.get("attempts") or 0),
                     "last_attempt": video.get("last_attempt"),
+                    "time_spent_seconds": time_spent_seconds,
+                    "time_spent_minutes": time_spent_minutes,
                     "video_url": f"/videos/{video['filename']}",
                 }
             )
@@ -206,8 +235,8 @@ class VideoService:
         return result
 
     @staticmethod
-    async def get_video_ground_truth(video_id: str) -> Optional[str]:
-        """Get ground truth text for a video"""
+    async def get_video_ground_truth(video_id: str) -> Optional[List[str]]:
+        """Get ground truth text for a video as a list of messages"""
         ground_truth_dir = Path(__file__).parent.parent.parent / "data" / "ground_truth"
 
         # Generate mixed-case version for new naming convention
@@ -227,7 +256,13 @@ class VideoService:
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         content = f.read().strip()
-                        return content if content else None
+                        if not content:
+                            return None
+                        # Split by "---" delimiter to get individual messages
+                        messages = [
+                            msg.strip() for msg in content.split("---") if msg.strip()
+                        ]
+                        return messages if messages else None
                 except Exception as e:
                     print(f"⚠️  Error reading ground truth file {file_path}: {e}")
 

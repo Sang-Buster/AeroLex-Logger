@@ -160,10 +160,9 @@
 
 /* Video card badges row */
 .video-badges-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
   margin-bottom: 12px;
 }
 
@@ -174,11 +173,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 90px;
+  width: 100%;
   height: 28px;
   padding: 0;
   border-radius: 6px;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   text-align: center;
   border: 1px solid;
@@ -188,7 +187,7 @@
 
 .score-badge-excellent {
   background-color: #dcfce7;
-  color: #15803d;
+  color: #166534;
   border-color: #bbf7d0;
 }
 
@@ -200,13 +199,13 @@
 
 .score-badge-average {
   background-color: #fef3c7;
-  color: #a16207;
-  border-color: #fed7aa;
+  color: #b45309;
+  border-color: #fde68a;
 }
 
 .score-badge-poor {
   background-color: #fee2e2;
-  color: #dc2626;
+  color: #b91c1c;
   border-color: #fecaca;
 }
 
@@ -214,6 +213,12 @@
   background-color: #f3f4f6;
   color: #6b7280;
   border-color: #d1d5db;
+}
+
+.attempts-badge {
+  background-color: #f5f3ff;
+  color: #6d28d9;
+  border-color: #e9d5ff;
 }
 
 .status-badge.bg-green-100 {
@@ -235,9 +240,9 @@
 }
 
 .time-badge {
-  background-color: #f3e8ff !important;
-  color: #7c3aed !important;
-  border-color: #e9d5ff !important;
+  background-color: #fef3c7 !important;
+  color: #b45309 !important;
+  border-color: #fde68a !important;
 }
 
 /* Modal styles */
@@ -261,6 +266,10 @@
 .transcription-item {
   @apply mb-2 p-2 bg-white rounded border-l-4 border-blue-500;
   animation: fadeIn 0.3s ease-in;
+}
+
+.similarity-badge {
+  @apply text-xs px-2 py-1 rounded font-medium;
 }
 
 .transcription-confidence {
@@ -343,6 +352,14 @@
 
   .stats-grid {
     @apply grid-cols-2;
+  }
+
+  .transcription-item {
+    @apply p-3;
+  }
+
+  .similarity-badge {
+    @apply text-xs px-1.5 py-0.5;
   }
 }
 

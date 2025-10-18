@@ -88,20 +88,12 @@ class DashboardManager {
       const hasAttempts = this.statistics.total_attempts > 0;
 
       if (hasAttempts) {
-        const score = Math.round(this.statistics.average_score * 100);
+        const score = (this.statistics.average_score * 100).toFixed(2);
+        const scorePercent = parseFloat(score);
         avgScoreEl.textContent = `${score}%`;
 
-        // Add color coding
-        avgScoreEl.className = "text-lg font-medium";
-        if (score >= 90) {
-          avgScoreEl.classList.add("text-green-600");
-        } else if (score >= 70) {
-          avgScoreEl.classList.add("text-blue-600");
-        } else if (score >= 50) {
-          avgScoreEl.classList.add("text-yellow-600");
-        } else {
-          avgScoreEl.classList.add("text-red-600");
-        }
+        // Add color coding that matches video badges while keeping the green card background
+        avgScoreEl.className = `text-lg font-medium ${this.getScoreColorClass(scorePercent)}`;
       } else {
         avgScoreEl.textContent = "TBD";
         avgScoreEl.className = "text-lg font-medium text-gray-500";
@@ -114,11 +106,11 @@ class DashboardManager {
       attemptsEl.textContent = this.statistics.total_attempts || 0;
     }
 
-    // Update time spent (placeholder for now)
+    // Update time spent (from actual session data)
     const timeEl = document.getElementById("stats-time");
     if (timeEl) {
-      const estimatedTime = this.statistics.total_attempts * 2; // Assume 2 min per attempt
-      timeEl.textContent = `${estimatedTime} min`;
+      const timeMinutes = this.statistics.total_time_minutes || 0;
+      timeEl.textContent = `${timeMinutes} min`;
     }
   }
 
@@ -149,10 +141,6 @@ class DashboardManager {
     } else {
       card.className += " opacity-75";
       card.setAttribute("aria-label", `${video.title} - Locked`);
-    }
-
-    if (video.completed) {
-      card.className += " ring-2 ring-green-300";
     }
 
     const thumbnail = this.createVideoThumbnail(video, index);
@@ -261,19 +249,6 @@ class DashboardManager {
 
     thumbnail.appendChild(overlay);
 
-    // Add completion badge
-    if (video.completed) {
-      const completionBadge = document.createElement("div");
-      completionBadge.className =
-        "absolute top-2 right-2 bg-green-500 text-white rounded-full p-1.5 shadow-lg z-20";
-      completionBadge.innerHTML = `
-                <svg class="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                </svg>
-            `;
-      thumbnail.appendChild(completionBadge);
-    }
-
     // Add video number indicator
     const videoNumber = document.createElement("div");
     videoNumber.className =
@@ -288,21 +263,37 @@ class DashboardManager {
     const info = document.createElement("div");
     info.className = "p-4";
 
-    // Top row with equal-width badges
+    // Top row with equal-width badges (4 badges now)
     const badgesRow = document.createElement("div");
     badgesRow.className = "video-badges-row";
 
-    // Score badge
+    // Best Score badge (per-video score) - color based on score
     const scoreBadge = document.createElement("span");
     if (video.best_score > 0) {
-      const scorePercent = Math.round(video.best_score * 100);
-      const scoreBadgeClass = this.getScoreBadgeClass(scorePercent);
+      const scorePercent = (video.best_score * 100).toFixed(2);
+      const numericScore = parseFloat(scorePercent);
+      const scoreBadgeClass = this.getScoreBadgeClass(numericScore);
       scoreBadge.className = `score-badge ${scoreBadgeClass}`;
-      scoreBadge.textContent = `${scorePercent}%`;
+      scoreBadge.textContent = `🏆 ${scorePercent}%`;
+      scoreBadge.setAttribute(
+        "title",
+        `Best score for this video: ${scorePercent}%`,
+      );
     } else {
       scoreBadge.className = "score-badge score-badge-none";
       scoreBadge.textContent = "No Score";
+      scoreBadge.setAttribute("title", "No attempts yet");
     }
+
+    // Attempts badge (number of tries) - purple like Total Attempts
+    const attemptsBadge = document.createElement("span");
+    attemptsBadge.className = "status-badge attempts-badge";
+    const attempts = video.attempts || 0;
+    attemptsBadge.innerHTML = `📝 ${attempts}x`;
+    attemptsBadge.setAttribute(
+      "title",
+      `${attempts} attempt${attempts !== 1 ? "s" : ""}`,
+    );
 
     // Status badge
     const statusBadge = document.createElement("span");
@@ -310,22 +301,27 @@ class DashboardManager {
 
     if (video.completed) {
       statusBadge.className += " bg-green-100 text-green-700";
-      statusBadge.innerHTML = "✓ Done";
+      statusBadge.innerHTML = "✅ Done";
     } else if (video.unlocked) {
       statusBadge.className += " bg-blue-100 text-blue-700";
-      statusBadge.innerHTML = "▶ Available";
+      statusBadge.innerHTML = "🔓 Open";
     } else {
       statusBadge.className += " bg-gray-100 text-gray-700";
       statusBadge.innerHTML = "🔒 Locked";
     }
 
-    // Time spent badge (estimated based on attempts)
+    // Time spent badge (actual time from sessions) - yellow like Time Spent
     const timeBadge = document.createElement("span");
     timeBadge.className = "time-badge";
-    const estimatedTime = (video.attempts || 0) * 2; // 2 minutes per attempt
-    timeBadge.innerHTML = `⏱️ ${estimatedTime}m`;
+    const timeMinutes = video.time_spent_minutes || 0;
+    timeBadge.innerHTML = `⏱️ ${timeMinutes}m`;
+    timeBadge.setAttribute(
+      "title",
+      `${timeMinutes} minutes spent on this video`,
+    );
 
     badgesRow.appendChild(scoreBadge);
+    badgesRow.appendChild(attemptsBadge);
     badgesRow.appendChild(statusBadge);
     badgesRow.appendChild(timeBadge);
 
@@ -368,6 +364,7 @@ class DashboardManager {
                       <!-- Perfect equal-width badges row skeleton -->
                       <div class="video-badges-row">
                         <div class="score-badge bg-gray-300"></div>
+                        <div class="status-badge bg-gray-300"></div>
                         <div class="status-badge bg-gray-300"></div>
                         <div class="time-badge bg-gray-300"></div>
                       </div>
@@ -427,6 +424,14 @@ class DashboardManager {
         notification.remove();
       }
     }, 5000);
+  }
+
+  // Helper function to get score badge color class
+  getScoreBadgeClass(scorePercent) {
+    if (scorePercent >= 80) return "score-badge-excellent"; // Excellent - green
+    if (scorePercent >= 70) return "score-badge-good"; // Good - blue
+    if (scorePercent >= 50) return "score-badge-average"; // OK - yellow
+    return "score-badge-poor"; // Needs work - red
   }
 
   // Cleanup

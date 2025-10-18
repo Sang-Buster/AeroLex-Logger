@@ -186,12 +186,23 @@ class DatabaseManager:
             db.row_factory = aiosqlite.Row
             async with db.execute(
                 """
-                SELECT v.*, vp.unlocked, vp.completed, vp.best_score, vp.attempts, vp.last_attempt
+                SELECT v.*, 
+                       vp.unlocked, 
+                       vp.completed, 
+                       vp.best_score, 
+                       vp.attempts, 
+                       vp.last_attempt,
+                       COALESCE(SUM(ss.duration), 0) as time_spent_seconds
                 FROM videos v
                 LEFT JOIN video_progress vp ON v.id = vp.video_id AND vp.student_id = ?
+                LEFT JOIN student_sessions ss ON v.id = ss.video_id 
+                                               AND ss.student_id = ? 
+                                               AND ss.status = 'completed' 
+                                               AND ss.duration IS NOT NULL
+                GROUP BY v.id
                 ORDER BY v.order_index
             """,
-                (student_id,),
+                (student_id, student_id),
             ) as cursor:
                 rows = await cursor.fetchall()
                 return [dict(row) for row in rows]
@@ -209,21 +220,65 @@ class DatabaseManager:
             ) as cursor:
                 row = await cursor.fetchone()
                 if not row:
+                    print(f"⚠️ Could not find video {current_video_id} for unlock")
                     return
 
                 current_order = row[0]
                 next_order = current_order + 1
 
-                # Unlock next video
-                await db.execute(
-                    """
-                    INSERT OR REPLACE INTO video_progress (student_id, video_id, unlocked)
-                    SELECT ?, id, TRUE FROM videos WHERE order_index = ?
-                """,
-                    (student_id, next_order),
+                print(
+                    f"🔓 Unlocking next video (order {next_order}) after completing order {current_order}"
                 )
 
+                # Get next video ID
+                async with db.execute(
+                    """
+                    SELECT id FROM videos WHERE order_index = ?
+                """,
+                    (next_order,),
+                ) as cursor:
+                    next_video_row = await cursor.fetchone()
+                    if not next_video_row:
+                        print("ℹ️ No next video to unlock (completed last video)")
+                        return
+
+                    next_video_id = next_video_row[0]
+
+                # Check if progress entry exists
+                async with db.execute(
+                    """
+                    SELECT COUNT(*) FROM video_progress 
+                    WHERE student_id = ? AND video_id = ?
+                """,
+                    (student_id, next_video_id),
+                ) as cursor:
+                    count_row = await cursor.fetchone()
+                    exists = count_row[0] > 0
+
+                if exists:
+                    # Update existing entry
+                    await db.execute(
+                        """
+                        UPDATE video_progress 
+                        SET unlocked = TRUE
+                        WHERE student_id = ? AND video_id = ?
+                    """,
+                        (student_id, next_video_id),
+                    )
+                else:
+                    # Insert new entry
+                    await db.execute(
+                        """
+                        INSERT INTO video_progress (student_id, video_id, unlocked, completed, best_score, attempts)
+                        VALUES (?, ?, TRUE, FALSE, 0.0, 0)
+                    """,
+                        (student_id, next_video_id),
+                    )
+
                 await db.commit()
+                print(
+                    f"✅ Successfully unlocked video {next_video_id} for student {student_id}"
+                )
 
     # Session operations
     @staticmethod
@@ -247,17 +302,45 @@ class DatabaseManager:
 
     @staticmethod
     async def complete_session(session_id: str, duration: int):
-        """Mark session as completed"""
+        """Mark session as completed and accumulate duration"""
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            # Get current duration
+            async with db.execute(
+                "SELECT duration FROM student_sessions WHERE id = ?",
+                (session_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                current_duration = row[0] if row and row[0] else 0
+
+            # Add new duration to existing
+            total_duration = current_duration + duration
+
             await db.execute(
                 """
                 UPDATE student_sessions 
-                SET completed_at = CURRENT_TIMESTAMP, duration = ?, status = 'completed'
+                SET completed_at = CURRENT_TIMESTAMP,
+                    duration = ?,
+                    status = 'completed'
                 WHERE id = ?
             """,
-                (duration, session_id),
+                (total_duration, session_id),
             )
             await db.commit()
+            print(
+                f"✅ Session {session_id} duration updated: {current_duration}s + {duration}s = {total_duration}s"
+            )
+
+    @staticmethod
+    async def get_session(session_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieve a single student session by ID"""
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute(
+                "SELECT * FROM student_sessions WHERE id = ?",
+                (session_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
 
     # ASR results operations
     @staticmethod

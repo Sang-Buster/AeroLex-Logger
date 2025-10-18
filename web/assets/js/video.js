@@ -11,6 +11,9 @@ class VideoPlayerManager {
     this.mediaRecorder = null;
     this.audioStream = null;
     this.transcriptionInterval = null;
+    this.liveEvaluationTimeout = null;
+    this.pendingLiveConfidence = null;
+    this.lastLiveConfidence = null;
     this.hotkeyTranscriptionInterval = null;
     this.videoStartTime = null;
     this.isVRMode = false;
@@ -390,8 +393,12 @@ class VideoPlayerManager {
     // Complete session if active
     if (this.currentSession && this.videoStartTime) {
       const duration = Math.floor((Date.now() - this.videoStartTime) / 1000);
+      console.log(`📊 Completing session with ${duration}s duration`);
       window.api
         .completeVideoSession(this.currentSession, duration)
+        .then(() => {
+          console.log("✅ Session completed successfully");
+        })
         .catch((error) => console.warn("⚠️ Error completing session:", error));
     }
 
@@ -406,6 +413,8 @@ class VideoPlayerManager {
     this.currentVideo = null;
     this.currentSession = null;
     this.videoStartTime = null;
+    this.pendingLiveConfidence = null;
+    this.lastLiveConfidence = null;
 
     // Clear transcription
     this.clearTranscription();
@@ -423,27 +432,41 @@ class VideoPlayerManager {
     if (!student || !this.currentVideo) return;
 
     try {
-      console.log("🎙️ Starting live transcription display");
+      console.log("🎙️ Starting ASR transcription service...");
 
-      // Just start polling for transcriptions (ASR runs in background)
+      // Start the ASR service via API
+      const response = await window.api.startBufferedRecording(
+        student.student_id,
+        this.currentVideo.id,
+        this.currentSession,
+      );
+
+      if (!response.success) {
+        throw new Error(response.message || "Failed to start ASR service");
+      }
+
+      console.log(
+        "✅ ASR service started successfully (PID:",
+        response.pid,
+        ")",
+      );
+
       // Setup UI for recording
       this.setRecordingState(true);
+      this.pendingLiveConfidence = null;
+      this.lastLiveConfidence = null;
 
       // Start live transcription updates
       this.startLiveTranscription();
 
-      console.log(
-        "✅ Live transcription started (ASR must be running in background)",
-      );
       this.showNotification(
-        "Showing live transcriptions. Make sure ASR service is running: uv run start_vr_asr.py --student-id " +
-          student.student_id,
-        "info",
+        "🎤 Recording started! Speak into your microphone.",
+        "success",
       );
     } catch (error) {
       console.error("❌ Error starting recording:", error);
       this.showNotification(
-        "Failed to start live transcription display.",
+        "Failed to start ASR service: " + error.message,
         "error",
       );
     }
@@ -452,23 +475,55 @@ class VideoPlayerManager {
   async stopRecording() {
     if (!this.isRecording) return;
 
-    console.log("🛑 Stopping live transcription display");
+    const student = window.getCurrentStudent();
+    if (!student) return;
 
-    // Just stop polling for transcriptions (ASR keeps running)
-    // Stop live transcription
-    this.stopLiveTranscription();
+    try {
+      console.log("🛑 Stopping ASR transcription service...");
 
-    // Update UI
-    this.setRecordingState(false);
+      // Calculate recording duration
+      const recordingDuration = this.videoStartTime
+        ? Math.floor((Date.now() - this.videoStartTime) / 1000)
+        : 0;
 
-    // Get final evaluation
-    setTimeout(() => {
-      this.showFinalEvaluation();
-    }, 2000);
+      // Stop the ASR service via API
+      const response = await window.api.stopBufferedRecording(
+        student.student_id,
+      );
 
-    console.log(
-      "✅ Live transcription stopped (ASR still running in background)",
-    );
+      if (response.success) {
+        console.log("✅ ASR service stopped successfully");
+      }
+
+      // Record session duration to track time spent
+      if (this.currentSession && recordingDuration > 0) {
+        window.api
+          .completeVideoSession(this.currentSession, recordingDuration)
+          .catch((error) =>
+            console.warn("⚠️ Error completing session:", error),
+          );
+        // Reset timer so subsequent recordings measure additional time deltas
+        this.videoStartTime = Date.now();
+      }
+
+      // Stop live transcription
+      this.stopLiveTranscription();
+
+      // Update UI
+      this.setRecordingState(false);
+
+      // Get final evaluation
+      setTimeout(() => {
+        this.showFinalEvaluation();
+      }, 2000);
+
+      this.showNotification("🛑 Recording stopped", "info");
+    } catch (error) {
+      console.error("❌ Error stopping recording:", error);
+      // Even if stop fails, update UI
+      this.stopLiveTranscription();
+      this.setRecordingState(false);
+    }
   }
 
   toggleRecording() {
@@ -505,6 +560,9 @@ class VideoPlayerManager {
     const student = window.getCurrentStudent();
     if (!student) return;
 
+    // Track the last evaluated transcript to avoid re-evaluation
+    this.lastEvaluatedTranscript = null;
+
     this.transcriptionInterval = setInterval(async () => {
       try {
         const response = await window.api.getLiveTranscription(
@@ -524,6 +582,117 @@ class VideoPlayerManager {
       clearInterval(this.transcriptionInterval);
       this.transcriptionInterval = null;
     }
+
+    if (this.liveEvaluationTimeout) {
+      clearTimeout(this.liveEvaluationTimeout);
+      this.liveEvaluationTimeout = null;
+    }
+
+    this.pendingLiveConfidence = null;
+    this.lastEvaluatedTranscript = null;
+  }
+
+  queueLiveEvaluation(transcript, confidence = null, transcriptIndex = null) {
+    if (!transcript || !this.currentVideo) return;
+
+    if (this.liveEvaluationTimeout) {
+      clearTimeout(this.liveEvaluationTimeout);
+    }
+
+    const numericConfidence =
+      typeof confidence === "number" && Number.isFinite(confidence)
+        ? confidence
+        : null;
+
+    if (numericConfidence !== null) {
+      this.pendingLiveConfidence = numericConfidence;
+      this.lastLiveConfidence = numericConfidence;
+    } else {
+      this.pendingLiveConfidence = null;
+    }
+
+    this.liveEvaluationTimeout = setTimeout(() => {
+      this.runLiveEvaluation(transcript, transcriptIndex);
+    }, 600); // debounce live evaluation to reduce API spam
+  }
+
+  async runLiveEvaluation(transcript, transcriptIndex = null) {
+    const cleanedTranscript = transcript.trim();
+    if (!cleanedTranscript) {
+      this.liveEvaluationTimeout = null;
+      return;
+    }
+
+    const student = window.getCurrentStudent();
+    if (!student || !this.currentVideo) {
+      this.liveEvaluationTimeout = null;
+      return;
+    }
+
+    try {
+      const liveConfidence =
+        this.pendingLiveConfidence !== null
+          ? this.pendingLiveConfidence
+          : this.lastLiveConfidence;
+
+      const response = await window.api.evaluateTranscript(
+        student.student_id,
+        this.currentVideo.id,
+        cleanedTranscript,
+      );
+
+      if (response.success && response.evaluation) {
+        if (liveConfidence !== null) {
+          this.lastLiveConfidence = liveConfidence;
+        }
+
+        // Update the similarity badge in the live transcription
+        if (transcriptIndex !== null) {
+          const transcriptEl = document.getElementById("live-transcript");
+          if (transcriptEl) {
+            const items = transcriptEl.querySelectorAll(".transcription-item");
+            if (items[transcriptIndex]) {
+              const badge =
+                items[transcriptIndex].querySelector(".similarity-badge");
+              if (badge) {
+                const similarity = response.evaluation.similarity || 0;
+                const similarityPercent = (similarity * 100).toFixed(2);
+                const badgeClass = this.getSimilarityBadgeClass(similarity);
+                badge.className = `similarity-badge text-xs px-2 py-1 rounded whitespace-nowrap ${badgeClass}`;
+                badge.textContent = `${similarityPercent}%`;
+              }
+            }
+          }
+        }
+
+        this.displayEvaluationResults(
+          {
+            transcript: cleanedTranscript,
+            similarity_score: response.evaluation.similarity,
+            wer: response.evaluation.wer,
+            matched_ground_truth:
+              response.matched_ground_truth ||
+              response.evaluation.matched_ground_truth ||
+              "",
+            evaluation: response.evaluation,
+            confidence: liveConfidence,
+          },
+          { autoUpdateProgress: false },
+        );
+      }
+    } catch (error) {
+      console.warn("⚠️ Error performing live evaluation:", error);
+    } finally {
+      this.liveEvaluationTimeout = null;
+      this.pendingLiveConfidence = null;
+    }
+  }
+
+  getSimilarityBadgeClass(similarity) {
+    if (similarity >= 0.9) return "bg-green-100 text-green-700 font-semibold";
+    if (similarity >= 0.7) return "bg-blue-100 text-blue-700 font-semibold";
+    if (similarity >= 0.5) return "bg-yellow-100 text-yellow-700 font-semibold";
+    return "bg-red-100 text-red-700 font-semibold";
   }
 
   updateLiveTranscription(transcriptions) {
@@ -535,20 +704,33 @@ class VideoPlayerManager {
 
     transcriptEl.innerHTML = "";
 
-    latestTranscriptions.forEach((transcription) => {
+    latestTranscriptions.forEach((transcription, index) => {
       const item = document.createElement("div");
       item.className = "transcription-item";
+      item.dataset.transcriptIndex = index;
+      item.dataset.timestamp = transcription.timestamp;
 
-      const confidence = transcription.confidence || 0;
-      const confidenceClass =
-        confidence > 0.8 ? "high" : confidence > 0.6 ? "medium" : "low";
+      const isLatest = index === latestTranscriptions.length - 1;
+
+      // Show similarity badge if already evaluated (from transcription data)
+      let badgeHtml = "";
+      if (transcription.similarity_score !== undefined) {
+        const similarity = transcription.similarity_score;
+        const similarityPercent = (similarity * 100).toFixed(2);
+        const badgeClass = this.getSimilarityBadgeClass(similarity);
+        badgeHtml = `<span class="similarity-badge text-xs px-2 py-1 rounded whitespace-nowrap self-start sm:self-center ${badgeClass}">${similarityPercent}%</span>`;
+      } else if (
+        isLatest &&
+        transcription.timestamp !== this.lastEvaluatedTranscript
+      ) {
+        // Only show "Evaluating..." for latest transcript if not yet evaluated AND not already pending evaluation
+        badgeHtml = `<span class="similarity-badge text-xs px-2 py-1 rounded bg-gray-200 text-gray-600 whitespace-nowrap self-start sm:self-center">Evaluating...</span>`;
+      }
 
       item.innerHTML = `
-                <div class="flex justify-between items-start">
-                    <span class="text-sm text-gray-800">${transcription.transcript}</span>
-                    <span class="transcription-confidence ${confidenceClass} ml-2">
-                        ${Math.round(confidence * 100)}%
-                    </span>
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
+                    <span class="text-sm text-gray-800 flex-1 break-words">${transcription.transcript}</span>
+                    ${badgeHtml}
                 </div>
                 <div class="text-xs text-gray-500 mt-1">
                     ${new Date(transcription.timestamp).toLocaleTimeString()}
@@ -560,6 +742,43 @@ class VideoPlayerManager {
 
     // Auto-scroll to bottom
     transcriptEl.scrollTop = transcriptEl.scrollHeight;
+
+    const latestEntry = latestTranscriptions[latestTranscriptions.length - 1];
+
+    // Display evaluation results if already available
+    if (
+      latestEntry?.similarity_score !== undefined &&
+      latestEntry?.wer !== undefined
+    ) {
+      this.displayEvaluationResults(
+        {
+          transcript: latestEntry.transcript,
+          similarity_score: latestEntry.similarity_score,
+          wer: latestEntry.wer,
+          matched_ground_truth: latestEntry.matched_ground_truth || "",
+          confidence: latestEntry.confidence,
+        },
+        { autoUpdateProgress: false },
+      );
+    }
+    // Only evaluate if this is a NEW transcript we haven't evaluated before
+    else if (
+      this.isRecording &&
+      this.currentVideo &&
+      latestEntry?.transcript?.trim() &&
+      latestEntry.timestamp !== this.lastEvaluatedTranscript &&
+      latestEntry.similarity_score === undefined
+    ) {
+      this.lastEvaluatedTranscript = latestEntry.timestamp;
+      console.log(
+        `🔍 Evaluating NEW transcript: "${latestEntry.transcript.substring(0, 50)}..."`,
+      );
+      this.queueLiveEvaluation(
+        latestEntry.transcript,
+        latestEntry.confidence,
+        latestTranscriptions.length - 1,
+      );
+    }
   }
 
   clearTranscription() {
@@ -585,60 +804,170 @@ class VideoPlayerManager {
     }
   }
 
-  displayEvaluationResults(result) {
+  displayEvaluationResults(result, options = {}) {
+    const { autoUpdateProgress = true } = options;
+
     const resultsSection = document.getElementById("results-section");
     const resultsContent = document.getElementById("evaluation-results");
 
     if (!resultsSection || !resultsContent) return;
 
-    const similarity = result.similarity_score || 0;
-    const wer = result.wer || 1;
-    const confidence = result.confidence || 0;
+    const evaluationData = result.evaluation || {};
+    const similarity =
+      typeof result.similarity_score === "number"
+        ? result.similarity_score
+        : typeof evaluationData.similarity === "number"
+          ? evaluationData.similarity
+          : 0;
+    const wer =
+      typeof result.wer === "number"
+        ? result.wer
+        : typeof evaluationData.wer === "number"
+          ? evaluationData.wer
+          : 1;
+    const confidenceRaw =
+      typeof result.confidence === "number"
+        ? result.confidence
+        : typeof evaluationData.confidence === "number"
+          ? evaluationData.confidence
+          : null;
+
+    let resolvedConfidence = confidenceRaw;
+    if (
+      (resolvedConfidence === null || resolvedConfidence <= 0) &&
+      this.lastLiveConfidence !== null
+    ) {
+      resolvedConfidence = this.lastLiveConfidence;
+    }
+
+    const hasConfidence =
+      typeof resolvedConfidence === "number" && resolvedConfidence > 0;
+    if (hasConfidence) {
+      this.lastLiveConfidence = resolvedConfidence;
+    }
+
+    const groundTruthText =
+      result.matched_ground_truth ||
+      evaluationData.matched_ground_truth ||
+      result.ground_truth ||
+      "";
+
+    const confidenceBorderClass = hasConfidence
+      ? this.getScoreBorderClass(resolvedConfidence)
+      : "border-gray-300";
+    const confidenceColorClass = hasConfidence
+      ? this.getScoreColorClass(resolvedConfidence)
+      : "text-gray-500";
+    const confidenceDisplay = hasConfidence
+      ? `${Math.round(resolvedConfidence * 100)}%`
+      : "--";
+    const isLivePreview = !autoUpdateProgress;
+    const confidenceSubtitle = hasConfidence
+      ? isLivePreview
+        ? "Live ASR confidence"
+        : "ASR model confidence"
+      : isLivePreview
+        ? "Live evaluation (confidence unavailable)"
+        : "Confidence unavailable";
 
     resultsContent.innerHTML = `
-            <div class="score-display">
-                <div class="score-item">
-                    <div class="score-value ${this.getScoreClass(similarity)}">${Math.round(similarity * 100)}%</div>
-                    <div class="score-label">Similarity</div>
+            <div class="space-y-4">
+                <!-- Score Cards Grid - Responsive -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                    <!-- Similarity Card -->
+                    <div class="bg-white rounded-lg border-2 ${this.getScoreBorderClass(similarity)} p-3 sm:p-4 text-center shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 sm:mb-2">Similarity</div>
+                        <div class="text-3xl sm:text-4xl font-bold ${this.getScoreColorClass(similarity)}">${(similarity * 100).toFixed(2)}%</div>
+                        <div class="mt-1 sm:mt-2 text-xs text-gray-600">${this.getScoreFeedback(similarity)}</div>
+                    </div>
+                    
+                    <!-- Word Error Rate Card -->
+                    <div class="bg-white rounded-lg border-2 ${this.getWerBorderClass(wer)} p-3 sm:p-4 text-center shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 sm:mb-2">Word Error Rate</div>
+                        <div class="text-3xl sm:text-4xl font-bold ${this.getWerColorClass(wer)}">${(wer * 100).toFixed(2)}%</div>
+                        <div class="mt-1 sm:mt-2 text-xs text-gray-600">${this.getWerFeedback(wer)}</div>
+                    </div>
+                    
+                    <!-- Confidence Card -->
+                    <div class="bg-white rounded-lg border-2 ${confidenceBorderClass} p-3 sm:p-4 text-center shadow-sm hover:shadow-md transition-shadow">
+                        <div class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1 sm:mb-2">Confidence</div>
+                        <div class="text-3xl sm:text-4xl font-bold ${confidenceColorClass}">${confidenceDisplay}</div>
+                        <div class="mt-1 sm:mt-2 text-xs text-gray-600">${confidenceSubtitle}</div>
+                    </div>
                 </div>
-                <div class="score-item">
-                    <div class="score-value ${this.getScoreClass(1 - wer)}">${Math.round((1 - wer) * 100)}%</div>
-                    <div class="score-label">Accuracy</div>
+
+                <!-- Transcript Comparison -->
+                <div class="bg-gray-50 rounded-lg p-3 sm:p-4 space-y-3">
+                    <div class="border-l-4 border-blue-500 pl-3">
+                        <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Your Transcript</div>
+                        <p class="text-sm text-gray-900 break-words">${result.transcript}</p>
+                    </div>
+                    ${
+                      groundTruthText
+                        ? `
+                        <div class="border-l-4 border-green-500 pl-3">
+                            <div class="text-xs font-semibold text-gray-500 uppercase mb-1">Expected Radio Call</div>
+                            <p class="text-sm text-gray-700 break-words">${groundTruthText}</p>
+                        </div>
+                    `
+                        : ""
+                    }
                 </div>
-                <div class="score-item">
-                    <div class="score-value ${this.getScoreClass(confidence)}">${Math.round(confidence * 100)}%</div>
-                    <div class="score-label">Confidence</div>
-                </div>
-            </div>
-            <div class="mt-4">
-                <p class="text-sm"><strong>Your transcript:</strong> ${result.transcript}</p>
-                ${result.ground_truth ? `<p class="text-sm mt-2"><strong>Expected:</strong> ${result.ground_truth}</p>` : ""}
             </div>
         `;
 
     resultsSection.classList.remove("hidden");
 
-    // Update progress if score is good
-    if (similarity > 0.7) {
-      const student = window.getCurrentStudent();
-      if (student) {
-        window.api
-          .updateStudentProgress(
-            student.student_id,
-            this.currentVideo.id,
-            true,
-            similarity,
-          )
-          .catch((error) => console.warn("⚠️ Error updating progress:", error));
-      }
+    if (autoUpdateProgress && this.currentVideo) {
+      // Allow backend to complete progress update, then refresh dashboard view
+      setTimeout(() => {
+        if (window.dashboard) {
+          window.dashboard.loadDashboard();
+        }
+      }, 750);
     }
   }
 
-  getScoreClass(score) {
-    if (score >= 0.9) return "excellent";
-    if (score >= 0.7) return "good";
-    if (score >= 0.5) return "average";
-    return "poor";
+  getScoreBorderClass(score) {
+    if (score >= 0.9) return "border-green-500";
+    if (score >= 0.7) return "border-blue-500";
+    if (score >= 0.5) return "border-yellow-500";
+    return "border-red-500";
+  }
+
+  getScoreColorClass(score) {
+    if (score >= 0.9) return "text-green-600";
+    if (score >= 0.7) return "text-blue-600";
+    if (score >= 0.5) return "text-yellow-600";
+    return "text-red-600";
+  }
+
+  getScoreFeedback(score) {
+    if (score >= 0.9) return "Excellent! 🎉";
+    if (score >= 0.7) return "Good job! ✅";
+    if (score >= 0.5) return "Keep practicing 📚";
+    return "Try again 💪";
+  }
+
+  getWerBorderClass(wer) {
+    if (wer <= 0.1) return "border-green-500";
+    if (wer <= 0.3) return "border-blue-500";
+    if (wer <= 0.5) return "border-yellow-500";
+    return "border-red-500";
+  }
+
+  getWerColorClass(wer) {
+    if (wer <= 0.1) return "text-green-600";
+    if (wer <= 0.3) return "text-blue-600";
+    if (wer <= 0.5) return "text-yellow-600";
+    return "text-red-600";
+  }
+
+  getWerFeedback(wer) {
+    if (wer <= 0.1) return "Crystal clear! 🛫";
+    if (wer <= 0.3) return "Solid readback ✈️";
+    if (wer <= 0.5) return "Some corrections needed ✏️";
+    return "Practice the phrase again 📻";
   }
 
   // Video player controls

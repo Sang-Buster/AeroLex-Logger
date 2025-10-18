@@ -1,10 +1,7 @@
-Approach control this is Cessna 123 Alpha Bravo 10 miles north inbound for landing runway 7 Left
-Cessna 123 Alpha Bravo approach control radar contact 10 miles north descend and maintain 2500 expect vectors for runway 7 Left
-Descend and maintain 2500 Cessna 123 Alpha Bravo
-Cessna 123 Alpha Bravo turn left heading 180 descend and maintain 1500
-Left heading 180 descend and maintain 1500 Cessna 123 Alpha Bravo
-Cessna 123 Alpha Bravo turn left heading 120 cleared ILS runway 7 Left approach contact tower 119.1
-Left heading 120 cleared ILS runway 7 Left contact tower 119.1 Cessna 123 Alpha Bravo
-Tower Cessna 123 Alpha Bravo with you on the ILS runway 7 Left
-Cessna 123 Alpha Bravo runway 7 Left cleared to land wind 070 at 6 knots
-Runway 7 Left cleared to land Cessna 123 Alpha Bravo
+Daytona Approach, Riddle four eighty-one, nine miles northwest of Ormond, one thousand six hundred, full stop, information foxtrot.
+---
+Daytona Tower, Riddle four eighty-one, direct to numbers, runway seven left.
+---
+Daytona Ground, riddle four eighty-one, holding short November three seven left, taxi back to riddle ramp
+---
+Eagle Data, riddle four eighty-one, ramping in and up at alpha one eight

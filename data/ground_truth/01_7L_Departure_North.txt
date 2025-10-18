@@ -1,3 +1,7 @@
-Daytona Beach Clearance, Riddle 481, requesting VFR flight following, to Fernandina airport, as filed information Delta.
-Riddle 481, that is affirmative, 5500 is the altitude.
-Riddle 481, taxi via Echo, November, cross runway 16.
+Daytona Beach Clearance, Riddle four eighty-one, requesting V-F-R flight following to Fernandina airport, as filed, information Delta
+---
+Daytona Ground, riddle four eighty-one, at Romeo one, ready to taxi.
+---
+Daytona Tower, Riddle four eighty-one, holding short of seven left at November six, ready for departure.
+---
+Daytona departure, Riddle four eighty one, one thousand one hundred climbing three thousand five hundred, zero three zero heading.

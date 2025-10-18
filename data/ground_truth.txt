@@ -1,83 +1,138 @@
 ----------------------------------------------------------------
-01-1- 7L Depature North.mp4
-----------------------------------------------------------------
-Daytona Beach Clearance, Riddle 481, requesting VFR flight following, to Fernandina airport, as filed information Delta.
-
-Riddle 481, that is affirmative, 5500 is the altitude.
-
-Riddle 481, taxi via Echo, November, cross runway 16.
-
-
-
-----------------------------------------------------------------
-03-1- 7L Arrival North.mp4
+01_7L_Departure_North.mp4
 ----------------------------------------------------------------
 
+Daytona Beach Clearance, Riddle four eighty-one, requesting V-F-R flight following to Fernandina airport, as filed, information Delta
+
+Daytona Ground, riddle four eighty-one, at Romeo one, ready to taxi.
+
+Daytona Tower, Riddle four eighty-one, holding short of seven left at November six, ready for departure.
+
+Daytona departure, Riddle four eighty one, one thousand one hundred climbing three thousand five hundred, zero three zero heading.
+
+----------------------------------------------------------------
+02_7L_Arrival_North.mp4
+----------------------------------------------------------------
+
+Daytona Approach, Riddle four eighty-one, nine miles northwest of Ormond, one thousand six hundred, full stop, information foxtrot.
+
+Daytona Tower, Riddle four eighty-one, direct to numbers, runway seven left.
+
+Daytona Ground, riddle four eighty-one, holding short November three seven left, taxi back to riddle ramp
+
+Eagle Data, riddle four eighty-one, ramping in and up at alpha one eight
+
+----------------------------------------------------------------
+03_7R_Arrival_South.mp4
+----------------------------------------------------------------
+
+Daytona Approach, Riddle four eighty-one, eight miles south of New Smyrna, two thousand seven hundred, full stop, information echo.
+
+Daytona Tower, Riddle four eighty-one, midfield right downwind, runway seven right, one thousand five hundred.
+
+----------------------------------------------------------------
+04_7R_Departure_South.mp4
+----------------------------------------------------------------
+
+Daytona Beach Clearance, Riddle four eighty-one, requesting V-F-R departure to south practice area, information Delta.
+
+Daytona Ground, riddle four eighty-one, Romeo three, ready to taxi.
+
+Riddle four eighty-one, runway seven right, taxi via echo sierra, hold short runway seven left.
+
+Daytona Tower, Riddle four eighty-one, holding short of seven right at Sierra, ready for departure
+
+Daytona departure, Riddle four eighty-one, niner hundred climbing three thousand, heading one one zero.
+
+Daytona departure, Riddle four eighty-one, request terminate.
+
+----------------------------------------------------------------
+05_Cross_Country_to_St_Augustine_Part_1.mp4
+----------------------------------------------------------------
+
+Daytona Departure, Riddle four eighty-one, requesting momentary frequency change to open flight plan.
+
+Saint Petersburg radio, Riddle four eighty-one, sending and receiving one two two point four.
+
+Jacksonville approach, Riddle four eighty-one, five thousand five hundred.
+
+----------------------------------------------------------------
+06_Cross_Country_to_St_Augustine_Part_2.mp4
+----------------------------------------------------------------
+
+Saint Augustine Ground, Riddle four eighty-one, Bravo one, request taxi back to active, southbound departure to Daytona.
+
+Saint Augustine tower, Riddle four eighty-one, holding short runway three one at bravo six, ready for departure, southbound.
+
+----------------------------------------------------------------
+07_Non_towered_Closed_Traffic_at_Deland_Part_1.mp4
+----------------------------------------------------------------
+
+Deland traffic, Skyhawk four eighty-one echo romeo, five miles north of the airport, request traffic advisory.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, left downwind, traffic patterns making left traffic, runway one two, following traffic on final, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, upwind, runway one two, left traffic, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, left downwind, runway one two, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, midfield left downwind, runway one two, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, turning left base to final, runway one two, Deland.
+
+----------------------------------------------------------------
+08_Non_towered_Closed_Traffic_at_Deland_Part_2.mp4
+----------------------------------------------------------------
+
+Deland traffic, Skyhawk four eighty-one echo romeo, upwind, runway one two, left traffic, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, turning left crosswind, runway one two, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, turning left downwind, runway one two, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, left downwind, runway one two, full stop, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, turning left base, runway one two, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, left base turning final, runway one two, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, taxiing runway one two via delta, Deland.
+
+Deland traffic, Skyhawk four eighty-one echo romeo, taxiing to FBO via delta, alpha, Deland.
+
+----------------------------------------------------------------
+09_Towered_Closed_Traffic_at_Flagler_Part_1.mp4
+----------------------------------------------------------------
+
+Flaggler Tower, Riddle four eighty-one, one one miles southwest of Flaggler, three thousand, request traffic patterns, information Tango.
+
+Riddle four eighty-one, descend to pattern altitude at my discretion.
+
+Riddle four eighty-one, will join the midfield, traffic in sight, number two following a twin star on right downwind.
+
+----------------------------------------------------------------
+10_Towered_Closed_Traffic_at_Flagler_Part_2.mp4
+----------------------------------------------------------------
+
+Flaggler Ground, Riddle four eighty-one, holding short of echo, taxi back to two niner, northbound departure.
+
+----------------------------------------------------------------
+11_Ormond_Departure_to_Daytona_Arrival_Part_1.mp4
+----------------------------------------------------------------
+
+Ormond Tower, Riddle four eighty-one, one one miles northwest of Ormond, two thousand one hundred, full stop, information Charlie.
+
+----------------------------------------------------------------
+12_Ormond_Departure_to_Daytona_Arrival_Part_2.mp4
+----------------------------------------------------------------
 
 
 ----------------------------------------------------------------
-04-1- 7R Rose Arrival South.mp4
+13_Ormond_Departure_to_Daytona_Arrival_Part_3.mp4
 ----------------------------------------------------------------
 
+Daytona approach, riddle four eighty-one, six miles north of Ormond, two thousand one hundred, request Beach arrival, information Delta
 
+Riddle four eighty-one, behind company on the left, taxi via echo, papa, papa niner, cross runway seven left, straight to the ramp.
 
-----------------------------------------------------------------
-06-1- 7R Depature South.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-08-1- Cross Country to St. Augistine_Part 1.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-08-3- Cross Country to St. Augistine_Part 2.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-11-1- Non-towered Closed Traffic at Deland_Part 1.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-11-3- Non-towered Closed Traffic at Deland_Part 2.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-13-1- Towered Closed Traffic at Flagler_Part 1.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-13-3- Towered Closed Traffic at Flagler_Part 2.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-15-1- Ormond Departure to Daytona Arrival_Part 1.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-15-3- Ormond Departure to Daytona Arrival_Part 2.mp4
-----------------------------------------------------------------
-
-
-
-----------------------------------------------------------------
-15-5- Ormond Departure to Daytona Arrival_Part 3.mp4
-----------------------------------------------------------------
-
-
-
+Eagle Data, Riddle four eighty-one, in and up at bravo niner.

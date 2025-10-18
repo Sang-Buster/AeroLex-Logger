@@ -10,6 +10,7 @@ import aiosqlite
 from database.sqlite_db import DatabaseManager
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
+from services.student_service import StudentService
 from services.video_service import VideoService
 
 router = APIRouter()
@@ -208,11 +209,27 @@ async def start_video_session(video_id: str, student_id: str):
         )
 
 
+class SessionCompleteRequest(BaseModel):
+    duration: Optional[int] = None
+
+
 @router.post("/{session_id}/complete")
-async def complete_video_session(session_id: str, duration: Optional[int] = None):
+async def complete_video_session(
+    session_id: str, request: SessionCompleteRequest = None
+):
     """Complete a video session"""
     try:
+        duration = request.duration if request else 0
         await DatabaseManager.complete_session(session_id, duration or 0)
+
+        session = await DatabaseManager.get_session(session_id)
+        if session:
+            await StudentService.check_time_based_unlock(
+                session["student_id"], session["video_id"]
+            )
+            print(
+                f"✅ Session {session_id} completed with {duration}s duration for video {session['video_id']}"
+            )
 
         return {
             "success": True,

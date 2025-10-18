@@ -6,9 +6,11 @@ Handles student registration, authentication, and progress tracking
 
 import uuid
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from database.sqlite_db import DatabaseManager
+from services.evaluation_service import summarize_scores_by_video
+from services.video_service import VideoService
 
 
 class StudentService:
@@ -104,29 +106,71 @@ class StudentService:
         # Get video progress
         video_progress = await DatabaseManager.get_student_video_progress(student_id)
 
+        # Preload ground truth messages for scoring calculations
+        ground_truth_cache: Dict[str, List[str]] = {}
+        for video in video_progress:
+            messages = await VideoService.get_video_ground_truth(video["id"])
+            ground_truth_cache[video["id"]] = messages or []
+
+        def fetch_ground_truth(video_id: str) -> List[str]:
+            return ground_truth_cache.get(video_id, [])
+
         # Get ASR results summary
         asr_results = await DatabaseManager.get_student_asr_results(student_id)
+        score_summary = summarize_scores_by_video(asr_results, fetch_ground_truth)
+
+        # Get total time spent from sessions
+        total_time_seconds = 0
+        async with await DatabaseManager.get_connection() as db:
+            async with db.execute(
+                """
+                SELECT SUM(duration) as total_duration
+                FROM student_sessions
+                WHERE student_id = ? AND status = 'completed' AND duration IS NOT NULL
+            """,
+                (student_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                if row and row[0]:
+                    total_time_seconds = row[0]
 
         # Calculate statistics
         total_videos = len(video_progress)
         unlocked_videos = len([v for v in video_progress if v.get("unlocked")])
         completed_videos = len([v for v in video_progress if v.get("completed")])
 
-        # Calculate average scores
-        scores = [
-            r["similarity_score"]
-            for r in asr_results
-            if r["similarity_score"] is not None
-        ]
-        avg_score = sum(scores) / len(scores) if scores else 0.0
+        watched_video_scores = []
+        for video in video_progress:
+            video_id = video["id"]
+            summary = score_summary.get(video_id)
+            if summary:
+                message_scores = summary.get("message_scores", {})
+                average_score = float(summary.get("average", 0.0))
+            else:
+                message_scores = {}
+                average_score = float(video.get("best_score") or 0.0)
 
-        # Get best scores per video
-        video_scores = {}
-        for result in asr_results:
-            video_id = result["video_id"]
-            score = result["similarity_score"] or 0.0
-            if video_id not in video_scores or score > video_scores[video_id]:
-                video_scores[video_id] = score
+            video["average_score"] = average_score
+            video["matched_messages"] = len(message_scores)
+            # Maintain backward compatibility with existing UI badges
+            video["best_score"] = average_score
+
+            if (video.get("attempts") or 0) > 0:
+                watched_video_scores.append(average_score)
+
+        avg_score = (
+            sum(watched_video_scores) / len(watched_video_scores)
+            if watched_video_scores
+            else 0.0
+        )
+
+        video_scores = {
+            video["id"]: video.get("average_score", 0.0) for video in video_progress
+        }
+
+        total_attempts = sum(
+            int(video.get("attempts") or 0) for video in video_progress
+        )
 
         return {
             "student": student,
@@ -139,7 +183,9 @@ class StudentService:
                 if total_videos > 0
                 else 0,
                 "average_score": round(avg_score, 3),
-                "total_attempts": len(asr_results),
+                "total_attempts": total_attempts,
+                "total_time_seconds": total_time_seconds,
+                "total_time_minutes": round(total_time_seconds / 60, 1),
             },
             "video_scores": video_scores,
             "recent_results": asr_results[:10],  # Last 10 results
@@ -153,41 +199,95 @@ class StudentService:
 
         # Update video progress
         async with await DatabaseManager.get_connection() as db:
-            # Update or insert video progress
-            await db.execute(
+            # Get current progress
+            async with db.execute(
                 """
-                INSERT OR REPLACE INTO video_progress 
-                (student_id, video_id, unlocked, completed, best_score, attempts, last_attempt)
-                SELECT 
-                    ?,
-                    ?,
-                    COALESCE((SELECT unlocked FROM video_progress WHERE student_id = ? AND video_id = ?), TRUE),
-                    ?,
-                    MAX(COALESCE((SELECT best_score FROM video_progress WHERE student_id = ? AND video_id = ?), 0), ?),
-                    COALESCE((SELECT attempts FROM video_progress WHERE student_id = ? AND video_id = ?), 0) + 1,
-                    CURRENT_TIMESTAMP
+                SELECT unlocked, completed, best_score, attempts 
+                FROM video_progress 
+                WHERE student_id = ? AND video_id = ?
             """,
+                (student_id, video_id),
+            ) as cursor:
+                current_progress = await cursor.fetchone()
+
+            if current_progress:
+                # Update existing progress
                 (
-                    student_id,
-                    video_id,
-                    student_id,
-                    video_id,
-                    completed,
-                    student_id,
-                    video_id,
-                    score,
-                    student_id,
-                    video_id,
-                ),
-            )
+                    current_unlocked,
+                    current_completed,
+                    current_best_score,
+                    current_attempts,
+                ) = current_progress
+
+                # Update best score (keep highest) - only update if score > 0
+                if score > 0:
+                    new_best_score = max(current_best_score or 0.0, score)
+                else:
+                    new_best_score = current_best_score or 0.0
+
+                # Mark as completed if score is good OR already completed
+                new_completed = completed or current_completed
+
+                # Increment attempts
+                new_attempts = (current_attempts or 0) + 1
+
+                await db.execute(
+                    """
+                    UPDATE video_progress 
+                    SET completed = ?, best_score = ?, attempts = ?, last_attempt = CURRENT_TIMESTAMP
+                    WHERE student_id = ? AND video_id = ?
+                """,
+                    (new_completed, new_best_score, new_attempts, student_id, video_id),
+                )
+            else:
+                # Insert new progress (first attempt)
+                await db.execute(
+                    """
+                    INSERT INTO video_progress 
+                    (student_id, video_id, unlocked, completed, best_score, attempts, last_attempt)
+                    VALUES (?, ?, TRUE, ?, ?, 1, CURRENT_TIMESTAMP)
+                """,
+                    (student_id, video_id, completed, score),
+                )
 
             await db.commit()
 
-        # If video is completed, unlock next video
-        if completed:
+        # Check time spent and unlock next video if sufficient time has been spent
+        await StudentService.check_time_based_unlock(student_id, video_id, score)
+
+    @staticmethod
+    async def get_video_time_spent(student_id: str, video_id: str) -> int:
+        """Get total time spent by student on a specific video"""
+        async with await DatabaseManager.get_connection() as db:
+            async with db.execute(
+                """
+                SELECT COALESCE(SUM(duration), 0) as total_time
+                FROM student_sessions
+                WHERE student_id = ? AND video_id = ? AND status = 'completed' AND duration IS NOT NULL
+            """,
+                (student_id, video_id),
+            ) as cursor:
+                row = await cursor.fetchone()
+                return row[0] if row else 0
+
+    @staticmethod
+    async def check_time_based_unlock(
+        student_id: str, video_id: str, score: float = 0.0
+    ):
+        """Unlock the next video once engagement threshold is met."""
+        time_spent = await StudentService.get_video_time_spent(student_id, video_id)
+
+        if time_spent >= 10:
+            print(
+                f"✅ Student spent {time_spent}s on video {video_id} - unlocking next video..."
+            )
             await DatabaseManager.unlock_next_video(student_id, video_id)
             print(
-                f"🎯 Student {student_id} completed video {video_id} (score: {score:.3f})"
+                f"🔓 Next video unlocked for student {student_id} after {time_spent}s engagement"
+            )
+        else:
+            print(
+                f"📊 Video {video_id} progress updated (attempts incremented, score: {score:.3f}, time: {time_spent}s)"
             )
 
     @staticmethod

@@ -137,6 +137,17 @@ class APIClient {
     return await this.request(`/api/v1/students/${studentId}/dashboard`);
   }
 
+  async evaluateTranscript(studentId, videoId, transcript) {
+    return await this.request(`/api/v1/asr/evaluate`, {
+      method: "POST",
+      body: JSON.stringify({
+        student_id: studentId,
+        video_id: videoId,
+        transcript,
+      }),
+    });
+  }
+
   /**
    * Video endpoints
    */

@@ -20,6 +20,7 @@ class VideoPlayerManager {
     this.vrVideo = null;
     this.isHotkeyPressed = false;
     this.useDualASR = true; // Use dual ASR system by default
+    this.activeRecordingStudentId = null;
     this.init();
   }
 
@@ -382,13 +383,12 @@ class VideoPlayerManager {
     }
   }
 
-  closeVideo() {
+  async closeVideo(options = {}) {
+    const { silentStop = false } = options;
     console.log("🔚 Closing video");
 
     // Stop recording if active
-    if (this.isRecording) {
-      this.stopRecording();
-    }
+    await this.stopRecordingIfActive({ silent: silentStop });
 
     // Complete session if active
     if (this.currentSession && this.videoStartTime) {
@@ -419,10 +419,15 @@ class VideoPlayerManager {
     // Clear transcription
     this.clearTranscription();
 
-    // Refresh dashboard to show updated progress
-    setTimeout(() => {
-      window.dashboard?.loadDashboard();
-    }, 1000);
+    // Refresh dashboard to show updated progress (only if not in admin mode)
+    if (!options.silentStop) {
+      setTimeout(() => {
+        const currentStudent = window.api?.getCurrentStudent();
+        if (currentStudent && !currentStudent.is_admin) {
+          window.dashboard?.loadDashboard();
+        }
+      }, 1000);
+    }
   }
 
   async startRecording() {
@@ -455,6 +460,7 @@ class VideoPlayerManager {
       this.setRecordingState(true);
       this.pendingLiveConfidence = null;
       this.lastLiveConfidence = null;
+      this.activeRecordingStudentId = student.student_id;
 
       // Start live transcription updates
       this.startLiveTranscription();
@@ -472,11 +478,16 @@ class VideoPlayerManager {
     }
   }
 
-  async stopRecording() {
+  async stopRecording(options = {}) {
+    const { silent = false } = options;
     if (!this.isRecording) return;
 
     const student = window.getCurrentStudent();
-    if (!student) return;
+    const studentId = student?.student_id || this.activeRecordingStudentId;
+    if (!studentId) {
+      console.warn("⚠️ Unable to determine student ID when stopping recording");
+      return;
+    }
 
     try {
       console.log("🛑 Stopping ASR transcription service...");
@@ -487,9 +498,7 @@ class VideoPlayerManager {
         : 0;
 
       // Stop the ASR service via API
-      const response = await window.api.stopBufferedRecording(
-        student.student_id,
-      );
+      const response = await window.api.stopBufferedRecording(studentId);
 
       if (response.success) {
         console.log("✅ ASR service stopped successfully");
@@ -513,16 +522,20 @@ class VideoPlayerManager {
       this.setRecordingState(false);
 
       // Get final evaluation
-      setTimeout(() => {
-        this.showFinalEvaluation();
-      }, 2000);
+      if (!silent) {
+        setTimeout(() => {
+          this.showFinalEvaluation();
+        }, 2000);
 
-      this.showNotification("🛑 Recording stopped", "info");
+        this.showNotification("🛑 Recording stopped", "info");
+      }
     } catch (error) {
       console.error("❌ Error stopping recording:", error);
       // Even if stop fails, update UI
       this.stopLiveTranscription();
       this.setRecordingState(false);
+    } finally {
+      this.activeRecordingStudentId = null;
     }
   }
 
@@ -531,6 +544,31 @@ class VideoPlayerManager {
       this.stopRecording();
     } else {
       this.startRecording();
+    }
+  }
+
+  async stopRecordingIfActive(options = {}) {
+    const { silent = false } = options;
+
+    if (this.isRecording) {
+      await this.stopRecording({ silent });
+      return;
+    }
+
+    if (this.activeRecordingStudentId) {
+      try {
+        await window.api.stopBufferedRecording(this.activeRecordingStudentId);
+        console.log(
+          "🛑 Force-stopped buffered recording for student",
+          this.activeRecordingStudentId,
+        );
+      } catch (error) {
+        console.warn("⚠️ Failed to force stop buffered recording:", error);
+      } finally {
+        this.activeRecordingStudentId = null;
+        this.setRecordingState(false);
+        this.stopLiveTranscription();
+      }
     }
   }
 

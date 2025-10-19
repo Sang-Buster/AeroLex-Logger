@@ -4,6 +4,7 @@ Admin API Routes
 Administrative functionality for VR training application
 """
 
+from pathlib import Path
 from typing import List, Optional
 
 import aiosqlite
@@ -11,6 +12,7 @@ from database.sqlite_db import DatabaseManager
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from services.student_service import StudentService
 
 router = APIRouter()
 
@@ -28,7 +30,7 @@ class AdminStudentData(BaseModel):
     completion_rate: float
     average_score: float
     total_attempts: int
-    time_spent_minutes: Optional[int] = 0
+    time_spent_minutes: Optional[float] = 0.0
     latest_activity: Optional[str] = None
     audio_files: List[str] = []
 
@@ -136,69 +138,33 @@ async def get_all_students_data(admin_id: str):
                 student_dict = dict(student)
                 student_id = student_dict["student_id"]
 
-                # Get video progress stats
-                async with db.execute(
-                    """
-                    SELECT 
-                        COUNT(*) as total_videos,
-                        SUM(CASE WHEN completed = 1 THEN 1 ELSE 0 END) as completed_videos,
-                        AVG(best_score) as avg_score,
-                        SUM(attempts) as total_attempts
-                    FROM video_progress WHERE student_id = ?
-                """,
-                    (student_id,),
-                ) as cursor:
-                    progress_row = await cursor.fetchone()
-                    progress = dict(progress_row) if progress_row else {}
+                # Reuse student progress service to keep stats consistent with the dashboard
+                progress_data = await StudentService.get_student_progress(student_id)
+                stats = progress_data.get("statistics", {})
+                videos = progress_data.get("videos", [])
+                recent_results = progress_data.get("recent_results", [])
 
-                # Get session duration
-                async with db.execute(
-                    """
-                    SELECT SUM(duration) as total_duration 
-                    FROM student_sessions 
-                    WHERE student_id = ? AND duration IS NOT NULL
-                """,
-                    (student_id,),
-                ) as cursor:
-                    duration_row = await cursor.fetchone()
-                    total_duration = (
-                        duration_row["total_duration"] if duration_row else 0
-                    )
+                total_videos = stats.get("total_videos") or len(videos)
+                completed_videos = stats.get("completed_videos", 0)
+                completion_rate = round((stats.get("completion_rate") or 0) * 100, 2)
+                average_score = round((stats.get("average_score") or 0) * 100, 2)
+                total_attempts = stats.get("total_attempts", 0)
+                time_spent_minutes = stats.get("total_time_minutes", 0.0)
 
-                # Get latest activity
-                async with db.execute(
-                    """
-                    SELECT timestamp FROM asr_results 
-                    WHERE student_id = ? 
-                    ORDER BY timestamp DESC LIMIT 1
-                """,
-                    (student_id,),
-                ) as cursor:
-                    activity_row = await cursor.fetchone()
-                    latest_activity = (
-                        activity_row["timestamp"] if activity_row else None
-                    )
-
-                # Get audio files
-                audio_files = []
-                try:
-                    from services.student_service import StudentService
-
-                    audio_dir = await StudentService.get_student_audio_dir(student_id)
-                    if audio_dir.exists():
-                        audio_files = [f.name for f in audio_dir.glob("*.wav")]
-                except Exception as e:
-                    print(f"⚠️ Could not get audio files for {student_id}: {e}")
-
-                # Calculate completion rate
-                total_videos = progress.get("total_videos", 0)
-                completed_videos = progress.get("completed_videos", 0)
-                completion_rate = (
-                    (completed_videos / total_videos * 100) if total_videos > 0 else 0
+                latest_activity = (
+                    recent_results[0]["timestamp"]
+                    if recent_results
+                    else student_dict.get("last_active")
                 )
 
-                # Calculate average score as percentage
-                avg_score = (progress.get("avg_score", 0) or 0) * 100
+                # Collect audio files for quick counts in the table
+                audio_files: List[str] = []
+                try:
+                    audio_dir = await StudentService.get_student_audio_dir(student_id)
+                    if audio_dir.exists():
+                        audio_files = sorted([f.name for f in audio_dir.glob("*.wav")])
+                except Exception as e:
+                    print(f"⚠️ Could not get audio files for {student_id}: {e}")
 
                 students_data.append(
                     AdminStudentData(
@@ -209,10 +175,10 @@ async def get_all_students_data(admin_id: str):
                         last_active=student_dict["last_active"],
                         total_videos=total_videos,
                         completed_videos=completed_videos,
-                        completion_rate=round(completion_rate, 2),
-                        average_score=round(avg_score, 2),
-                        total_attempts=progress.get("total_attempts", 0) or 0,
-                        time_spent_minutes=int((total_duration or 0) / 60),
+                        completion_rate=completion_rate,
+                        average_score=average_score,
+                        total_attempts=total_attempts,
+                        time_spent_minutes=time_spent_minutes,
                         latest_activity=latest_activity,
                         audio_files=audio_files,
                     )
@@ -254,7 +220,19 @@ async def get_student_details(student_id: str, admin_id: str):
             """,
                 (student_id,),
             ) as cursor:
-                asr_results = [dict(row) for row in await cursor.fetchall()]
+                raw_results = await cursor.fetchall()
+                asr_results = []
+                for row in raw_results:
+                    record = dict(row)
+                    audio_path = record.get("audio_file_path")
+                    record["audio_filename"] = (
+                        Path(audio_path).name if audio_path else None
+                    )
+                    similarity = record.get("similarity_score")
+                    record["similarity_percent"] = (
+                        round(similarity * 100, 2) if similarity is not None else None
+                    )
+                    asr_results.append(record)
 
             # Get session history
             async with db.execute(

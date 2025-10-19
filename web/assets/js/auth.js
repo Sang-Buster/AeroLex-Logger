@@ -161,6 +161,14 @@ class AuthManager {
   }
 
   async handleLogout() {
+    if (window.videoPlayer?.closeVideo) {
+      try {
+        await window.videoPlayer.closeVideo({ silentStop: true });
+      } catch (error) {
+        console.warn("⚠️ Error closing video during logout:", error);
+      }
+    }
+
     const student = window.api.getCurrentStudent();
 
     if (student) {
@@ -227,7 +235,15 @@ class AuthManager {
     }
   }
 
-  showAdminDashboard(admin) {
+  async showAdminDashboard(admin) {
+    if (window.videoPlayer?.closeVideo) {
+      try {
+        await window.videoPlayer.closeVideo({ silentStop: true });
+      } catch (error) {
+        console.warn("⚠️ Error closing video before admin view:", error);
+      }
+    }
+
     if (this.loginScreen && this.dashboardScreen && this.adminScreen) {
       this.loginScreen.classList.add("hidden");
       this.dashboardScreen.classList.add("hidden");

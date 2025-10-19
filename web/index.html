@@ -713,6 +713,58 @@
         </main>
       </div>
 
+      <!-- Admin Recordings Modal -->
+      <div
+        id="admin-recordings-modal"
+        class="hidden fixed inset-0 z-50 flex items-center justify-center bg-gray-900 bg-opacity-60"
+        role="dialog"
+        aria-modal="true"
+      >
+        <div
+          class="bg-white rounded-lg shadow-2xl max-w-5xl w-full mx-4 flex flex-col"
+          style="max-height: 85vh"
+        >
+          <div class="flex items-start justify-between border-b px-6 py-4">
+            <div>
+              <h3
+                id="admin-recordings-title"
+                class="text-lg font-semibold text-gray-900"
+              >
+                Student Recordings
+              </h3>
+              <p
+                id="admin-recordings-meta"
+                class="text-sm text-gray-500 mt-1"
+              ></p>
+            </div>
+            <button
+              id="admin-recordings-close"
+              class="text-gray-400 hover:text-gray-600"
+              aria-label="Close recordings modal"
+            >
+              <svg
+                class="h-5 w-5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <div class="px-6 py-4 overflow-y-auto flex-1">
+            <div id="admin-recordings-status" class="text-sm text-gray-500">
+              Loading recordings...
+            </div>
+            <div id="admin-recordings-content" class="hidden mt-4"></div>
+          </div>
+        </div>
+      </div>
+
       <!-- Video Player Modal -->
       <div id="video-modal" class="hidden fixed inset-0 z-50 overflow-y-auto">
         <div

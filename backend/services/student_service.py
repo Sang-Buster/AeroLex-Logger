@@ -193,9 +193,16 @@ class StudentService:
 
     @staticmethod
     async def update_video_progress(
-        student_id: str, video_id: str, completed: bool = False, score: float = 0.0
+        student_id: str,
+        video_id: str,
+        completed: bool = False,
+        score: float = 0.0,
+        matched_ground_truth: str = "",
     ):
-        """Update student's progress on a specific video"""
+        """Update student's progress on a specific video
+
+        Only increments attempts when practicing a NEW unique ground truth message.
+        """
 
         # Update video progress
         async with await DatabaseManager.get_connection() as db:
@@ -209,6 +216,39 @@ class StudentService:
                 (student_id, video_id),
             ) as cursor:
                 current_progress = await cursor.fetchone()
+
+            # Get the last matched ground truth for this student and video
+            async with db.execute(
+                """
+                SELECT ground_truth 
+                FROM asr_results 
+                WHERE student_id = ? AND video_id = ?
+                ORDER BY timestamp DESC 
+                LIMIT 2
+            """,
+                (student_id, video_id),
+            ) as cursor:
+                recent_results = await cursor.fetchall()
+
+            # Determine if this is a new unique attempt
+            # Only increment if the matched_ground_truth is different from the most recent one
+            should_increment_attempt = False
+
+            if matched_ground_truth:
+                # If we have at least 2 results, compare current with previous
+                if len(recent_results) >= 2:
+                    # recent_results[0] is the CURRENT submission (just saved)
+                    # recent_results[1] is the PREVIOUS submission
+                    previous_ground_truth = (
+                        recent_results[1][0] if recent_results[1] else ""
+                    )
+
+                    # Only increment if practicing a different message
+                    if matched_ground_truth != previous_ground_truth:
+                        should_increment_attempt = True
+                else:
+                    # First or second attempt - always count
+                    should_increment_attempt = True
 
             if current_progress:
                 # Update existing progress
@@ -228,8 +268,11 @@ class StudentService:
                 # Mark as completed if score is good OR already completed
                 new_completed = completed or current_completed
 
-                # Increment attempts
-                new_attempts = (current_attempts or 0) + 1
+                # Increment attempts ONLY if practicing a new unique message
+                if should_increment_attempt:
+                    new_attempts = (current_attempts or 0) + 1
+                else:
+                    new_attempts = current_attempts or 0
 
                 await db.execute(
                     """

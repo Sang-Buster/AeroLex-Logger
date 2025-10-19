@@ -123,12 +123,18 @@ async def submit_asr_result(
             ground_truth_text = "\n---\n".join(ground_truth_messages)
 
         # Prepare ASR result data
+        # Use matched_ground_truth if available for proper attempt tracking
+        matched_ground_truth = ""
+        if evaluation_results:
+            matched_ground_truth = evaluation_results.get("matched_ground_truth", "")
+
         asr_data = {
             "session_id": request.session_id,
             "student_id": request.student_id,
             "video_id": request.video_id,
             "transcript": request.transcript,
-            "ground_truth": ground_truth_text,
+            "ground_truth": matched_ground_truth
+            or ground_truth_text,  # Use matched message for tracking
             "confidence": request.confidence,
             "audio_file_path": request.audio_file_path,
         }
@@ -149,12 +155,14 @@ async def submit_asr_result(
         # Update student progress - always update, even with low scores
         # The unlock logic is now based on time spent, not score threshold
         if evaluation_results:
+            # Pass matched_ground_truth to track unique attempts
             background_tasks.add_task(
                 StudentService.update_video_progress,
                 request.student_id,
                 request.video_id,
                 True,  # completed
                 evaluation_results["similarity"],
+                matched_ground_truth,
             )
 
         response_data = {
@@ -465,13 +473,24 @@ async def start_buffered_recording(request: ASRSessionRequest):
     try:
         student_id = request.student_id
 
-        # Check if already running
+        # Check if already running and process is still alive
         if student_id in _asr_processes:
-            return {
-                "success": True,
-                "message": "ASR already running",
-                "student_id": student_id,
-            }
+            existing_process = _asr_processes[student_id]["process"]
+            # Check if process is still running
+            if existing_process.poll() is None:
+                print(
+                    f"⚠️ ASR already running for student {student_id} (PID: {existing_process.pid})"
+                )
+                return {
+                    "success": True,
+                    "message": "ASR already running",
+                    "student_id": student_id,
+                    "pid": existing_process.pid,
+                }
+            else:
+                # Process has ended, remove from dict
+                print(f"🗑️ Cleaning up dead process for student {student_id}")
+                del _asr_processes[student_id]
 
         # Get student directories
         audio_dir = await StudentService.get_student_audio_dir(student_id)
@@ -514,6 +533,26 @@ async def start_buffered_recording(request: ASRSessionRequest):
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="VR ASR script not found",
             )
+
+        # Double-check no other process is running for this student (even if not in dict)
+        try:
+            result = subprocess.run(
+                ["pgrep", "-f", f"start_vr_asr.py.*{student_id}"],
+                capture_output=True,
+                text=True,
+            )
+            if result.stdout.strip():
+                existing_pids = result.stdout.strip().split("\n")
+                print(
+                    f"⚠️ Found existing ASR process(es) for {student_id}: {existing_pids}"
+                )
+                return {
+                    "success": True,
+                    "message": f"ASR already running (PIDs: {', '.join(existing_pids)})",
+                    "student_id": student_id,
+                }
+        except Exception as e:
+            print(f"⚠️ Could not check for existing processes: {e}")
 
         # Start process in its own process group (for easier cleanup)
         import os

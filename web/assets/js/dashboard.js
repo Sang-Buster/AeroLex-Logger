@@ -28,6 +28,12 @@ class DashboardManager {
       return;
     }
 
+    // Don't load student dashboard if user is an admin
+    if (student.is_admin) {
+      console.log("👤 Admin user detected, skipping student dashboard load");
+      return;
+    }
+
     console.log("📊 Loading dashboard for:", student.name);
 
     try {
@@ -60,6 +66,9 @@ class DashboardManager {
   async refreshData() {
     const student = window.getCurrentStudent();
     if (!student) return;
+
+    // Don't refresh dashboard data if user is an admin
+    if (student.is_admin) return;
 
     try {
       // Refresh statistics silently

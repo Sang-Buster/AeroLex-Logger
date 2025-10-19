@@ -144,6 +144,7 @@ class VRFlightApp {
     console.log("🎬 Setting up video error suppression...");
 
     // Override console.error temporarily to catch and suppress video fetch errors
+    let mediaErrorCount = 0;
     const originalConsoleError = console.error;
     console.error = function (...args) {
       const message = args.join(" ");
@@ -153,7 +154,13 @@ class VRFlightApp {
         ) ||
         message.includes("media resource was aborted")
       ) {
-        console.warn("🎬 Suppressed video fetch abort error");
+        // Only log first occurrence to avoid spam
+        if (mediaErrorCount === 0) {
+          console.warn(
+            "🎬 Media fetch abort errors are being suppressed (this is normal for audio/video)",
+          );
+        }
+        mediaErrorCount++;
         return;
       }
       originalConsoleError.apply(console, args);

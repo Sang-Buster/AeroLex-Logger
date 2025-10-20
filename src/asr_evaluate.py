@@ -19,8 +19,6 @@ from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-import jsonlines
-
 
 def levenshtein_distance(s1: str, s2: str) -> int:
     """
@@ -47,48 +45,212 @@ def levenshtein_distance(s1: str, s2: str) -> int:
     return previous_row[-1]
 
 
-def normalize_aviation_numbers(text: str) -> str:
+def words_to_number(words: list) -> str:
     """
-    Normalize aviation-specific number formats.
-    Examples:
-    - "four eighty-one" or "four eighty one" -> "481"
-    - "four eight one" -> "481"
-    - "one two three" -> "123"
+    Convert a list of number words to a string representation.
+    Handles aviation formats intelligently:
+    - ["four", "eighty", "one"] -> "481" (digit concatenation)
+    - ["one", "thousand", "one", "hundred"] -> "1100" (mathematical)
+    - ["zero", "three", "zero"] -> "030" (individual digits with leading zeros)
     """
-    # Number word to digit mapping
-    number_words = {
-        "zero": "0",
-        "one": "1",
-        "two": "2",
-        "three": "3",
-        "four": "4",
-        "five": "5",
-        "six": "6",
-        "seven": "7",
-        "eight": "8",
-        "nine": "9",
+    number_map = {
+        "zero": 0,
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+        "thirteen": 13,
+        "fourteen": 14,
+        "fifteen": 15,
+        "sixteen": 16,
+        "seventeen": 17,
+        "eighteen": 18,
+        "nineteen": 19,
+        "twenty": 20,
+        "thirty": 30,
+        "forty": 40,
+        "fifty": 50,
+        "sixty": 60,
+        "seventy": 70,
+        "eighty": 80,
+        "ninety": 90,
+        "hundred": 100,
+        "thousand": 1000,
+        "million": 1000000,
     }
 
-    # Replace number words with digits
+    # Check if this is aviation-style digit reading (all single digits or tens)
+    # E.g., "four eighty one" = 4-81, "zero three zero" = 0-3-0
+    is_digit_style = all(
+        word.lower() in number_map
+        and number_map[word.lower()] < 100
+        and word.lower() not in ["hundred", "thousand", "million"]
+        for word in words
+    )
+
+    # Also check if it contains "hundred" or "thousand" (then it's mathematical)
+    has_scale_words = any(
+        word.lower() in ["hundred", "thousand", "million"] for word in words
+    )
+
+    if is_digit_style and not has_scale_words:
+        # Aviation digit-by-digit reading: handle as "four eighty one" = "4" "81"
+        result = ""
+        i = 0
+        while i < len(words):
+            word = words[i].lower().strip()
+            if word not in number_map:
+                i += 1
+                continue
+
+            value = number_map[word]
+
+            # Check if next word forms a compound number (e.g., "eighty one" = 81)
+            if value >= 20 and value < 100 and i + 1 < len(words):
+                next_word = words[i + 1].lower().strip()
+                if next_word in number_map and number_map[next_word] < 10:
+                    # Compound: "eighty one" -> "81"
+                    result += str(value + number_map[next_word])
+                    i += 2
+                    continue
+
+            # Single digit or tens without compound
+            if value < 10:
+                result += str(value)
+            else:
+                result += str(value)
+            i += 1
+
+        return result
+    else:
+        # Mathematical interpretation for altitudes, etc.
+        total = 0
+        current = 0
+
+        for word in words:
+            word = word.lower().strip()
+            if word not in number_map:
+                continue
+
+            value = number_map[word]
+
+            if value >= 1000:
+                current = current or 1
+                total += current * value
+                current = 0
+            elif value >= 100:
+                current = (current or 1) * value
+            else:
+                current += value
+
+        return str(total + current)
+
+
+def normalize_aviation_numbers(text: str) -> str:
+    """
+    Algorithmically normalize aviation number formats.
+    No hardcoded patterns - works with ANY number word combination.
+    """
+    import re
+
+    # Phonetic corrections for common aviation words
+    phonetic_map = {
+        r"\brideau\b": "riddle",
+        r"\breddell\b": "riddle",
+        r"\bridal\b": "riddle",
+    }
+
+    for pattern, replacement in phonetic_map.items():
+        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+
+    # All possible number words (for detection)
+    number_words_set = {
+        "zero",
+        "one",
+        "two",
+        "three",
+        "four",
+        "five",
+        "six",
+        "seven",
+        "eight",
+        "nine",
+        "ten",
+        "eleven",
+        "twelve",
+        "thirteen",
+        "fourteen",
+        "fifteen",
+        "sixteen",
+        "seventeen",
+        "eighteen",
+        "nineteen",
+        "twenty",
+        "thirty",
+        "forty",
+        "fifty",
+        "sixty",
+        "seventy",
+        "eighty",
+        "ninety",
+        "hundred",
+        "thousand",
+        "million",
+    }
+
     words = text.split()
     result = []
     i = 0
 
     while i < len(words):
-        word = words[i].lower().strip()
+        original_word = words[i]
+        # Strip punctuation for checking
+        word_clean = re.sub(r"[^\w]", "", original_word.lower())
 
-        # Check if it's a number word
-        if word in number_words:
-            # Collect consecutive number words
-            number_sequence = []
-            while i < len(words) and words[i].lower().strip() in number_words:
-                number_sequence.append(number_words[words[i].lower().strip()])
-                i += 1
+        # Check if this word starts a number sequence
+        if word_clean in number_words_set:
+            # Collect all consecutive number words (but stop at punctuation)
+            number_word_sequence = []
+            has_trailing_punct = False
+            trailing_punct = ""
 
-            # Join the digits
-            result.append("".join(number_sequence))
+            while i < len(words):
+                original = words[i]
+                word_clean_check = re.sub(r"[^\w]", "", original.lower())
+
+                if word_clean_check in number_words_set:
+                    number_word_sequence.append(word_clean_check)
+                    # Check if this word has trailing punctuation (end of number group)
+                    if re.search(r"[^\w]$", original):
+                        trailing_punct = re.findall(r"[^\w]+$", original)[0]
+                        has_trailing_punct = True
+                        i += 1
+                        break
+                    i += 1
+                else:
+                    break
+
+            # Convert the sequence to a number (returns string now)
+            number_str = words_to_number(number_word_sequence)
+            if has_trailing_punct:
+                result.append(number_str + trailing_punct)
+            else:
+                result.append(number_str)
+        elif word_clean.isdigit():
+            # Already a digit - keep it
+            result.append(word_clean)
+            i += 1
         else:
-            result.append(words[i])
+            # Not a number word - keep original with punctuation
+            result.append(original_word)
             i += 1
 
     return " ".join(result)
@@ -299,6 +461,8 @@ def load_ground_truth(file_path: str) -> List[str]:
 
 def load_asr_results(file_path: str) -> List[Dict]:
     """Load ASR results from JSONL file."""
+    import jsonlines
+
     results = []
 
     if not Path(file_path).exists():

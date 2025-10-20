@@ -737,10 +737,23 @@ class VideoPlayerManager {
     const transcriptEl = document.getElementById("live-transcript");
     if (!transcriptEl || transcriptions.length === 0) return;
 
+    // Filter transcriptions by current video ID
+    const currentVideoId = this.currentVideo?.id;
+    const filteredTranscriptions = currentVideoId
+      ? transcriptions.filter((t) => t.video_id === currentVideoId)
+      : transcriptions;
+
     // Show latest transcriptions
-    const latestTranscriptions = transcriptions.slice(-5); // Last 5
+    const latestTranscriptions = filteredTranscriptions.slice(-5); // Last 5
 
     transcriptEl.innerHTML = "";
+
+    // If no transcriptions match the current video, show placeholder
+    if (latestTranscriptions.length === 0) {
+      transcriptEl.innerHTML =
+        '<p class="text-gray-400">Start speaking to see live transcription...</p>';
+      return;
+    }
 
     latestTranscriptions.forEach((transcription, index) => {
       const item = document.createElement("div");

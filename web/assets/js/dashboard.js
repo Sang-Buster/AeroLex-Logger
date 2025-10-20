@@ -9,6 +9,7 @@ class DashboardManager {
     this.videos = [];
     this.statistics = {};
     this.refreshInterval = null;
+    this.activeNotifications = new Set(); // Track active notification messages
     this.init();
   }
 
@@ -172,12 +173,8 @@ class DashboardManager {
         }
       });
     } else {
-      card.addEventListener("click", () => {
-        window.dashboard?.showNotification(
-          "Complete previous videos to unlock this one",
-          "info",
-        );
-      });
+      // Locked video - do nothing on click (no notification)
+      card.style.cursor = "not-allowed";
     }
 
     return card;
@@ -402,6 +399,15 @@ class DashboardManager {
   }
 
   showNotification(message, type = "info") {
+    // Check if this message is already being shown
+    const notificationKey = `${type}:${message}`;
+    if (this.activeNotifications.has(notificationKey)) {
+      return; // Don't show duplicate notifications
+    }
+
+    // Mark this notification as active
+    this.activeNotifications.add(notificationKey);
+
     // Create notification element
     const notification = document.createElement("div");
     notification.className = `notification ${type}`;
@@ -416,7 +422,7 @@ class DashboardManager {
                     <p class="text-sm font-medium text-gray-900">${message}</p>
                 </div>
                 <div class="ml-auto pl-3">
-                    <button class="text-gray-400 hover:text-gray-600" onclick="this.parentElement.parentElement.parentElement.remove()">
+                    <button class="notification-close text-gray-400 hover:text-gray-600">
                         <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M6 18L18 6M6 6l12 12"/>
                         </svg>
@@ -425,6 +431,13 @@ class DashboardManager {
             </div>
         `;
 
+    // Add close button handler
+    const closeButton = notification.querySelector(".notification-close");
+    closeButton.addEventListener("click", () => {
+      notification.remove();
+      this.activeNotifications.delete(notificationKey);
+    });
+
     document.body.appendChild(notification);
 
     // Auto-remove after 5 seconds
@@ -432,6 +445,8 @@ class DashboardManager {
       if (notification.parentElement) {
         notification.remove();
       }
+      // Remove from active notifications
+      this.activeNotifications.delete(notificationKey);
     }, 5000);
   }
 

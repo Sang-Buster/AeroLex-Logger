@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 ASR Service VR - Enhanced for VR Training with Circular Buffer
 Integrates with VR training backend with student sessions
 Uses 5-second circular buffer to prevent speech cutoffs
 """
 
+import io
 import json
 import logging
 import os
@@ -18,6 +20,19 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+
+# Fix Windows console encoding to support emojis
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace"
+        )
+        sys.stderr = io.TextIOWrapper(
+            sys.stderr.buffer, encoding="utf-8", errors="replace"
+        )
+    except (AttributeError, io.UnsupportedOperation):
+        # If stdout/stderr don't have a buffer (e.g., in some IDEs), ignore
+        pass
 
 import jsonlines
 import numpy as np

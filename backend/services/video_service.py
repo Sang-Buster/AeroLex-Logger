@@ -211,6 +211,11 @@ class VideoService:
                 avg_score = float(video.get("best_score") or 0.0)
                 matched_messages = 0
 
+            # Always unlock the first video (order_index = 1)
+            is_unlocked = bool(video.get("unlocked") or False)
+            if video["order_index"] == 1:
+                is_unlocked = True
+
             result.append(
                 {
                     "id": video["id"],
@@ -219,7 +224,7 @@ class VideoService:
                     "filename": video["filename"],
                     "order_index": video["order_index"],
                     "duration": video["duration"],
-                    "unlocked": bool(video.get("unlocked") or False),
+                    "unlocked": is_unlocked,
                     "completed": bool(video.get("completed") or False),
                     "best_score": avg_score,
                     "average_score": avg_score,

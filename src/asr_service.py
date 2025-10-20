@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 ASR Service - Local Speech Recognition Pipeline
 Mic → Silero VAD → Whisper large-v3-turbo → JSON logs
@@ -7,6 +8,7 @@ Continuously captures audio, detects speech with VAD, and transcribes using Whis
 Cross-platform compatible (Windows/Linux) with robust error handling.
 """
 
+import io
 import logging
 import os
 import queue
@@ -18,6 +20,19 @@ import wave
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Tuple
+
+# Fix Windows console encoding to support emojis
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace"
+        )
+        sys.stderr = io.TextIOWrapper(
+            sys.stderr.buffer, encoding="utf-8", errors="replace"
+        )
+    except (AttributeError, io.UnsupportedOperation):
+        # If stdout/stderr don't have a buffer (e.g., in some IDEs), ignore
+        pass
 
 import jsonlines
 import numpy as np

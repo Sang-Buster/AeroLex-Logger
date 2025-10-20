@@ -1,12 +1,27 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 """
 VR Flight Training ASR Service Startup Script
 """
 
 import argparse
+import io
 import subprocess
 import sys
 from pathlib import Path
+
+# Fix Windows console encoding to support emojis
+if sys.platform == "win32":
+    try:
+        sys.stdout = io.TextIOWrapper(
+            sys.stdout.buffer, encoding="utf-8", errors="replace"
+        )
+        sys.stderr = io.TextIOWrapper(
+            sys.stderr.buffer, encoding="utf-8", errors="replace"
+        )
+    except (AttributeError, io.UnsupportedOperation):
+        # If stdout/stderr don't have a buffer (e.g., in some IDEs), ignore
+        pass
 
 
 def main():

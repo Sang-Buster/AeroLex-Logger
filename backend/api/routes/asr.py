@@ -6,6 +6,8 @@ Includes circular buffer support for Control+Backtick recording
 """
 
 import json
+import os
+import platform
 import subprocess
 import sys
 from datetime import datetime
@@ -14,6 +16,9 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel
+
+# Detect platform
+IS_WINDOWS = platform.system() == "Windows"
 
 # Add src directory to path for ASR imports
 project_root = Path(__file__).parent.parent.parent.parent
@@ -536,26 +541,75 @@ async def start_buffered_recording(request: ASRSessionRequest):
 
         # Double-check no other process is running for this student (even if not in dict)
         try:
-            result = subprocess.run(
-                ["pgrep", "-f", f"start_vr_asr.py.*{student_id}"],
-                capture_output=True,
-                text=True,
-            )
-            if result.stdout.strip():
-                existing_pids = result.stdout.strip().split("\n")
-                print(
-                    f"⚠️ Found existing ASR process(es) for {student_id}: {existing_pids}"
+            if IS_WINDOWS:
+                # Windows: Use tasklist to check for processes
+                result = subprocess.run(
+                    ["tasklist", "/FI", "IMAGENAME eq python.exe", "/FO", "CSV", "/NH"],
+                    capture_output=True,
+                    text=True,
                 )
-                return {
-                    "success": True,
-                    "message": f"ASR already running (PIDs: {', '.join(existing_pids)})",
-                    "student_id": student_id,
-                }
+                # Check if any line contains our script and student ID
+                existing_pids = []
+                for line in result.stdout.strip().split("\n"):
+                    if "start_vr_asr.py" in line and student_id in line:
+                        # Extract PID from CSV format
+                        parts = line.split('","')
+                        if len(parts) >= 2:
+                            pid = parts[1].strip('"')
+                            existing_pids.append(pid)
+
+                if existing_pids:
+                    print(
+                        f"⚠️ Found existing ASR process(es) for {student_id}: {existing_pids}"
+                    )
+                    return {
+                        "success": True,
+                        "message": f"ASR already running (PIDs: {', '.join(existing_pids)})",
+                        "student_id": student_id,
+                    }
+            else:
+                # Unix/Linux: Use pgrep
+                result = subprocess.run(
+                    ["pgrep", "-f", f"start_vr_asr.py.*{student_id}"],
+                    capture_output=True,
+                    text=True,
+                )
+                if result.stdout.strip():
+                    existing_pids = result.stdout.strip().split("\n")
+                    print(
+                        f"⚠️ Found existing ASR process(es) for {student_id}: {existing_pids}"
+                    )
+                    return {
+                        "success": True,
+                        "message": f"ASR already running (PIDs: {', '.join(existing_pids)})",
+                        "student_id": student_id,
+                    }
         except Exception as e:
             print(f"⚠️ Could not check for existing processes: {e}")
 
+        # Setup log files for ASR process output
+        logs_dir = await StudentService.get_student_logs_dir(student_id)
+        stdout_log = logs_dir / "asr_stdout.log"
+        stderr_log = logs_dir / "asr_stderr.log"
+
+        # Open log files
+        stdout_file = open(stdout_log, "w")
+        stderr_file = open(stderr_log, "w")
+
         # Start process in its own process group (for easier cleanup)
-        import os
+        popen_args = {
+            "stdout": stdout_file,
+            "stderr": stderr_file,
+            "cwd": project_root,
+        }
+
+        # Platform-specific process group creation
+        if IS_WINDOWS:
+            # Windows: Use CREATE_NEW_PROCESS_GROUP flag
+            popen_args["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            # Unix/Linux: Use setsid
+            popen_args["preexec_fn"] = os.setsid
 
         process = subprocess.Popen(
             [
@@ -568,17 +622,16 @@ async def start_buffered_recording(request: ASRSessionRequest):
                 "--session-id",
                 request.session_id or "",
             ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd=project_root,
-            preexec_fn=os.setsid,  # Create new process group
+            **popen_args,
         )
 
-        # Store process
+        # Store process and log files
         _asr_processes[student_id] = {
             "process": process,
             "start_time": datetime.now().isoformat(),
             "config": session_config,
+            "stdout_file": stdout_file,
+            "stderr_file": stderr_file,
         }
 
         return {
@@ -618,14 +671,44 @@ async def stop_buffered_recording(student_id: str):
             print(f"⚠️ Error creating stop flag: {e}")
 
         if student_id not in _asr_processes:
-            # Use pkill to kill any orphaned processes
+            # Kill any orphaned processes
             try:
-                import subprocess as sp
+                if IS_WINDOWS:
+                    # Windows: Use taskkill to kill processes
+                    # Find python processes running our script
+                    result = subprocess.run(
+                        [
+                            "wmic",
+                            "process",
+                            "where",
+                            f"(name='python.exe' or name='pythonw.exe') and commandline like '%start_vr_asr.py%{student_id}%'",
+                            "get",
+                            "processid",
+                        ],
+                        capture_output=True,
+                        text=True,
+                    )
+                    pids = []
+                    for line in result.stdout.strip().split("\n")[1:]:  # Skip header
+                        line = line.strip()
+                        if line and line.isdigit():
+                            pids.append(line)
 
-                sp.run(["pkill", "-f", f"asr_service_vr.py.*{student_id}"], check=False)
-                print(f"🔪 Killed any orphaned ASR processes for student: {student_id}")
+                    for pid in pids:
+                        subprocess.run(["taskkill", "/F", "/PID", pid], check=False)
+                        print(
+                            f"🔪 Killed orphaned ASR process PID {pid} for student: {student_id}"
+                        )
+                else:
+                    # Unix/Linux: Use pkill
+                    subprocess.run(
+                        ["pkill", "-f", f"start_vr_asr.py.*{student_id}"], check=False
+                    )
+                    print(
+                        f"🔪 Killed any orphaned ASR processes for student: {student_id}"
+                    )
             except Exception as e:
-                print(f"❌ Error killing orphaned ASR processes: {e}")
+                print(f"⚠️ Error killing orphaned ASR processes: {e}")
                 pass
 
             return {
@@ -640,12 +723,20 @@ async def stop_buffered_recording(student_id: str):
 
         print(f"🔪 Stopping ASR process for student {student_id} (PID: {pid})")
 
-        # Try to kill the process group (negative PID on Unix)
+        # Kill the process (platform-specific)
         try:
-            os.killpg(os.getpgid(pid), signal.SIGTERM)
-            print(f"🔪 Sent SIGTERM to process group {pid}")
+            if IS_WINDOWS:
+                # Windows: Use taskkill to kill process tree
+                subprocess.run(["taskkill", "/F", "/T", "/PID", str(pid)], check=False)
+                print(f"🔪 Sent taskkill to process tree {pid}")
+            else:
+                # Unix/Linux: Kill process group
+                import signal
+
+                os.killpg(os.getpgid(pid), signal.SIGTERM)
+                print(f"🔪 Sent SIGTERM to process group {pid}")
         except Exception as e:
-            print(f"❌ Error killing process group: {e}")
+            print(f"⚠️ Error killing process group: {e}")
             # Fallback: just kill the parent
             process.terminate()
             print(f"🔪 Sent terminate to process {pid}")
@@ -657,20 +748,56 @@ async def stop_buffered_recording(student_id: str):
         except subprocess.TimeoutExpired:
             # Force kill
             try:
-                os.killpg(os.getpgid(pid), signal.SIGKILL)
+                if IS_WINDOWS:
+                    # Windows: Force kill already done above
+                    process.kill()
+                else:
+                    # Unix/Linux: Send SIGKILL to process group
+                    import signal
+
+                    os.killpg(os.getpgid(pid), signal.SIGKILL)
             except Exception as e:
-                print(f"❌ Error force killing process: {e}")
+                print(f"⚠️ Error force killing process: {e}")
                 process.kill()
             print(f"🔪 Force killed process {pid}")
 
-        # Also use pkill as backup to ensure children are killed
+        # Also kill any remaining orphaned processes as backup
         try:
-            import subprocess as sp
-
-            sp.run(["pkill", "-f", f"asr_service_vr.py.*{student_id}"], check=False)
+            if IS_WINDOWS:
+                # Windows: Find and kill any remaining processes
+                result = subprocess.run(
+                    [
+                        "wmic",
+                        "process",
+                        "where",
+                        f"(name='python.exe' or name='pythonw.exe') and commandline like '%start_vr_asr.py%{student_id}%'",
+                        "get",
+                        "processid",
+                    ],
+                    capture_output=True,
+                    text=True,
+                )
+                for line in result.stdout.strip().split("\n")[1:]:
+                    line = line.strip()
+                    if line and line.isdigit():
+                        subprocess.run(["taskkill", "/F", "/PID", line], check=False)
+            else:
+                # Unix/Linux: Use pkill
+                subprocess.run(
+                    ["pkill", "-f", f"start_vr_asr.py.*{student_id}"], check=False
+                )
         except Exception as e:
-            print(f"❌ Error killing orphaned ASR processes: {e}")
+            print(f"⚠️ Error killing orphaned ASR processes: {e}")
             pass
+
+        # Close log files
+        try:
+            if "stdout_file" in process_info:
+                process_info["stdout_file"].close()
+            if "stderr_file" in process_info:
+                process_info["stderr_file"].close()
+        except Exception as e:
+            print(f"⚠️ Error closing log files: {e}")
 
         # Remove from tracking
         del _asr_processes[student_id]

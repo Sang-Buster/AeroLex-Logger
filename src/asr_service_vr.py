@@ -6,6 +6,7 @@ Integrates with VR training backend with student sessions
 Uses 5-second circular buffer to prevent speech cutoffs
 """
 
+import configparser
 import io
 import json
 import logging
@@ -96,8 +97,25 @@ def resample_audio(audio_data: np.ndarray, orig_sr: int, target_sr: int) -> np.n
     return scipy_signal.resample(audio_data, num_samples).astype(np.float32)
 
 
+def load_config() -> configparser.ConfigParser:
+    """Load ASR configuration from file."""
+    config = configparser.ConfigParser()
+    config_file = Path(__file__).parent.parent / "asr_config.ini"
+
+    if config_file.exists():
+        config.read(config_file)
+        print(f"✅ Loaded config from: {config_file}")
+    else:
+        print(f"⚠️  Config file not found: {config_file}, using defaults")
+
+    return config
+
+
 # Configuration for VR Training
 class VRConfig:
+    # Load configuration file
+    _config = load_config()
+
     # Audio settings
     SAMPLE_RATE = None  # Detected at runtime
     WHISPER_SAMPLE_RATE = 16000
@@ -106,18 +124,41 @@ class VRConfig:
     DTYPE = np.float32
 
     # Circular buffer settings
-    USE_CIRCULAR_BUFFER = True
-    BUFFER_DURATION = 5.0
+    USE_CIRCULAR_BUFFER = _config.getboolean(
+        "BUFFER_SETTINGS", "USE_CIRCULAR_BUFFER", fallback=True
+    )
+    BUFFER_DURATION = _config.getfloat(
+        "BUFFER_SETTINGS", "BUFFER_DURATION", fallback=5.0
+    )
 
     # VAD settings
-    SPEECH_TIMEOUT = 1.0
-    MIN_SPEECH_DURATION = 0.5
+    SPEECH_TIMEOUT = _config.getfloat("BUFFER_SETTINGS", "SPEECH_TIMEOUT", fallback=1.0)
+    MIN_SPEECH_DURATION = _config.getfloat(
+        "BUFFER_SETTINGS", "MIN_SPEECH_DURATION", fallback=0.5
+    )
     OVERLAP_DURATION = 0.3
 
+    # VAD thresholds (for Silero)
+    VAD_THRESHOLD = _config.getfloat("VAD_SETTINGS", "VAD_THRESHOLD", fallback=0.6)
+    VAD_MIN_SPEECH_DURATION_MS = _config.getint(
+        "VAD_SETTINGS", "MIN_SPEECH_DURATION_MS", fallback=400
+    )
+    VAD_MIN_SILENCE_DURATION_MS = _config.getint(
+        "VAD_SETTINGS", "MIN_SILENCE_DURATION_MS", fallback=300
+    )
+    VAD_SPEECH_PAD_MS = _config.getint("VAD_SETTINGS", "SPEECH_PAD_MS", fallback=100)
+
     # Whisper settings
-    MODEL_NAME = "large-v3-turbo"
-    DEVICE = "cuda"
-    COMPUTE_TYPE = "float16"
+    MODEL_NAME = _config.get("MODEL_SETTINGS", "MODEL_NAME", fallback="large-v3-turbo")
+    DEVICE = _config.get("MODEL_SETTINGS", "DEVICE", fallback="cuda")
+    COMPUTE_TYPE = _config.get("MODEL_SETTINGS", "COMPUTE_TYPE", fallback="float16")
+
+    # Quality thresholds for noise filtering
+    MIN_CONFIDENCE = _config.getfloat("ASR_QUALITY", "MIN_CONFIDENCE", fallback=0.55)
+    MIN_TRANSCRIPT_LENGTH = _config.getint(
+        "ASR_QUALITY", "MIN_TRANSCRIPT_LENGTH", fallback=10
+    )
+    MIN_WORD_COUNT = _config.getint("ASR_QUALITY", "MIN_WORD_COUNT", fallback=3)
 
     # Session settings
     STUDENT_ID = None
@@ -156,7 +197,7 @@ class VRAudioBuffer:
         self.silero_buffer_duration = 1.0
 
     def _detect_speech_silero(self, audio_chunk: np.ndarray) -> bool:
-        """Detect speech using Silero VAD."""
+        """Detect speech using Silero VAD with configurable thresholds."""
         self.silero_buffer.extend(audio_chunk)
 
         required_samples = int(self.silero_buffer_duration * self.sample_rate)
@@ -169,7 +210,16 @@ class VRAudioBuffer:
         )
 
         audio_tensor = torch.from_numpy(vad_audio)
-        speech_timestamps = get_speech_timestamps(audio_tensor, self.vad)
+
+        # Use configurable VAD parameters to reduce false positives
+        speech_timestamps = get_speech_timestamps(
+            audio_tensor,
+            self.vad,
+            threshold=VRConfig.VAD_THRESHOLD,
+            min_speech_duration_ms=VRConfig.VAD_MIN_SPEECH_DURATION_MS,
+            min_silence_duration_ms=VRConfig.VAD_MIN_SILENCE_DURATION_MS,
+            speech_pad_ms=VRConfig.VAD_SPEECH_PAD_MS,
+        )
 
         max_buffer_samples = int(self.silero_buffer_duration * 1.5 * self.sample_rate)
         if len(self.silero_buffer) > max_buffer_samples:
@@ -532,6 +582,36 @@ class VRASRService:
             transcript, confidence = self.transcriber.transcribe(audio_data)
 
             if transcript:
+                # Apply quality filters to reduce noise and false positives
+                word_count = len(transcript.split())
+                transcript_length = len(transcript.strip())
+
+                # Filter 1: Check confidence threshold
+                if confidence < VRConfig.MIN_CONFIDENCE:
+                    print(
+                        f"🔇 Low confidence ({confidence:.3f} < {VRConfig.MIN_CONFIDENCE}) - skipping: '{transcript[:50]}...'"
+                    )
+                    logging.info(
+                        f"Filtered low confidence ({confidence:.3f}): {transcript}"
+                    )
+                    return
+
+                # Filter 2: Check minimum transcript length
+                if transcript_length < VRConfig.MIN_TRANSCRIPT_LENGTH:
+                    print(
+                        f"🔇 Too short ({transcript_length} chars < {VRConfig.MIN_TRANSCRIPT_LENGTH}) - skipping: '{transcript}'"
+                    )
+                    logging.info(f"Filtered short transcript: {transcript}")
+                    return
+
+                # Filter 3: Check minimum word count
+                if word_count < VRConfig.MIN_WORD_COUNT:
+                    print(
+                        f"🔇 Too few words ({word_count} < {VRConfig.MIN_WORD_COUNT}) - skipping: '{transcript}'"
+                    )
+                    logging.info(f"Filtered few-word transcript: {transcript}")
+                    return
+
                 # Double-check flag before writing (in case it was set during transcription)
                 if self.stop_flag_file.exists():
                     print("🛑 Stop recording flag detected - not writing to log")

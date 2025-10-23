@@ -64,6 +64,7 @@ Microphone → Audio Buffer → Silero VAD → Whisper large-v3-turbo → JSON L
  ┣ 📄.pre-commit-config.yaml            # Pre-commit configuration
  ┣ 📄.python-version                    # Python version
  ┣ 📄README.md                          # Project documentation
+ ┣ 📄asr_config.ini                     # ASR Configuration
  ┣ 📄asr.service                        # Linux systemd unit file
  ┣ 📄asr.service.bat                    # Windows service runner
  ┣ 📄install_linux.sh                   # Linux installation script

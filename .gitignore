@@ -4,6 +4,7 @@ videos/
 logs/
 models/
 asr_sessions/
+certs/
 **__pycache__**
 **.ruff_cache**
 *.db

@@ -477,6 +477,36 @@ for file in logs/asr_results_*.jsonl; do
 done
 ```
 
+## 🥽 VR Headset Setup
+
+To use the 360° VR training videos with a VR headset, you need to enable HTTPS (required by WebXR):
+
+### Quick Setup
+
+```bash
+# 1. Generate SSL certificate (one-time setup)
+python3 generate_cert.py
+
+# 2. Start backend with HTTPS
+python3 start_backend.py
+
+# 3. Find your computer's IP
+ifconfig | grep 'inet ' | grep -v '127.0.0.1'  # Linux/Mac
+ipconfig | findstr "IPv4"                       # Windows
+
+# 4. Open in VR headset browser
+# https://YOUR_IP:8000/static
+```
+
+### Entering VR Mode
+
+1. Open a 360° video in the web interface
+2. Look for the **VR button** (🥽 icon) in the bottom-right corner
+3. Click it to enter immersive VR mode
+4. Grant permission when prompted to access your VR headset
+
+**📖 For detailed instructions, troubleshooting, and supported headsets, see [VR_SETUP_GUIDE.md](VR_SETUP_GUIDE.md)**
+
 ## 🔒 Security Considerations
 
 - Service runs with minimal privileges
@@ -484,6 +514,7 @@ done
 - Audio data processed locally only
 - Consider disk encryption for sensitive environments
 - Regular log rotation recommended
+- Self-signed SSL certificates are for local development only
 
 ## 🆘 Support
 

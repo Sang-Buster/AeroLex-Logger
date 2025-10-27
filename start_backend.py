@@ -21,30 +21,55 @@ def main():
     # Change to backend directory
     os.chdir(backend_dir)
 
+        # Check for SSL certificate
+    cert_dir = Path(__file__).parent / "certs"
+    cert_file = cert_dir / "cert.pem"
+    key_file = cert_dir / "key.pem"
+    
+    use_https = cert_file.exists() and key_file.exists()
+    protocol = "https" if use_https else "http"
+    
     print("🚀 Starting VR Flight Training Backend...")
     print(f"📁 Working directory: {backend_dir}")
-    print("🌐 Web interface will be available at: http://localhost:8000/static")
-    print("📖 API docs will be available at: http://localhost:8000/docs")
+    
+    if use_https:
+        print("🔒 HTTPS enabled (required for VR headset access)")
+        print(f"🌐 Web interface: https://localhost:8000/static")
+        print(f"📖 API docs: https://localhost:8000/docs")
+        print("⚠️  You may see a security warning - click 'Advanced' and proceed (self-signed cert)")
+    else:
+        print("⚠️  Running on HTTP - VR headset access will NOT work!")
+        print("🔒 To enable HTTPS (required for VR), run:")
+        print("   python3 generate_cert.py")
+        print(f"🌐 Web interface: http://localhost:8000/static")
+        print(f"📖 API docs: http://localhost:8000/docs")
     print()
 
     try:
         # Start the backend server
-        subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "uvicorn",
-                "main:app",
-                "--host",
-                "127.0.0.1",
-                "--port",
-                "8000",
-                "--reload",
-                "--reload-dir",
-                ".",
-            ],
-            check=True,
-        )
+        cmd = [
+            sys.executable,
+            "-m",
+            "uvicorn",
+            "main:app",
+            "--host",
+            "0.0.0.0",  # Changed from 127.0.0.1 to allow VR headset access
+            "--port",
+            "8000",
+            "--reload",
+            "--reload-dir",
+            ".",
+        ]
+        
+        if use_https:
+            cmd.extend([
+                "--ssl-keyfile",
+                str(key_file),
+                "--ssl-certfile",
+                str(cert_file),
+            ])
+        
+        subprocess.run(cmd, check=True)
 
     except KeyboardInterrupt:
         print("\n👋 Backend server stopped")

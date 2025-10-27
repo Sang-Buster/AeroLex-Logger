@@ -46,20 +46,45 @@ def main():
     print()
 
     try:
+        # Check if uv is available (preferred)
+        uv_available = False
+        try:
+            subprocess.run(["uv", "--version"], capture_output=True, check=True)
+            uv_available = True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            pass
+        
         # Start the backend server
-        cmd = [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "main:app",
-            "--host",
-            "0.0.0.0",  # Changed from 127.0.0.1 to allow VR headset access
-            "--port",
-            "8000",
-            "--reload",
-            "--reload-dir",
-            ".",
-        ]
+        if uv_available:
+            print("📦 Using uv to run uvicorn...")
+            cmd = [
+                "uv",
+                "run",
+                "uvicorn",
+                "main:app",
+                "--host",
+                "0.0.0.0",  # Changed from 127.0.0.1 to allow VR headset access
+                "--port",
+                "8000",
+                "--reload",
+                "--reload-dir",
+                ".",
+            ]
+        else:
+            print("🐍 Using system Python to run uvicorn...")
+            cmd = [
+                sys.executable,
+                "-m",
+                "uvicorn",
+                "main:app",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--reload",
+                "--reload-dir",
+                ".",
+            ]
         
         if use_https:
             cmd.extend([

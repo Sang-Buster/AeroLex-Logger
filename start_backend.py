@@ -21,28 +21,29 @@ def main():
     # Change to backend directory
     os.chdir(backend_dir)
 
-        # Check for SSL certificate
+    # Check for SSL certificate
     cert_dir = Path(__file__).parent / "certs"
     cert_file = cert_dir / "cert.pem"
     key_file = cert_dir / "key.pem"
-    
+
     use_https = cert_file.exists() and key_file.exists()
-    protocol = "https" if use_https else "http"
-    
+
     print("🚀 Starting VR Flight Training Backend...")
     print(f"📁 Working directory: {backend_dir}")
-    
+
     if use_https:
         print("🔒 HTTPS enabled (required for VR headset access)")
-        print(f"🌐 Web interface: https://localhost:8000/static")
-        print(f"📖 API docs: https://localhost:8000/docs")
-        print("⚠️  You may see a security warning - click 'Advanced' and proceed (self-signed cert)")
+        print("🌐 Web interface: https://localhost:8000/static")
+        print("📖 API docs: https://localhost:8000/docs")
+        print(
+            "⚠️  You may see a security warning - click 'Advanced' and proceed (self-signed cert)"
+        )
     else:
         print("⚠️  Running on HTTP - VR headset access will NOT work!")
         print("🔒 To enable HTTPS (required for VR), run:")
         print("   python3 generate_cert.py")
-        print(f"🌐 Web interface: http://localhost:8000/static")
-        print(f"📖 API docs: http://localhost:8000/docs")
+        print("🌐 Web interface: http://localhost:8000/static")
+        print("📖 API docs: http://localhost:8000/docs")
     print()
 
     try:
@@ -53,7 +54,7 @@ def main():
             uv_available = True
         except (subprocess.CalledProcessError, FileNotFoundError):
             pass
-        
+
         # Start the backend server
         if uv_available:
             print("📦 Using uv to run uvicorn...")
@@ -85,15 +86,17 @@ def main():
                 "--reload-dir",
                 ".",
             ]
-        
+
         if use_https:
-            cmd.extend([
-                "--ssl-keyfile",
-                str(key_file),
-                "--ssl-certfile",
-                str(cert_file),
-            ])
-        
+            cmd.extend(
+                [
+                    "--ssl-keyfile",
+                    str(key_file),
+                    "--ssl-certfile",
+                    str(cert_file),
+                ]
+            )
+
         subprocess.run(cmd, check=True)
 
     except KeyboardInterrupt:

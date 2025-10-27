@@ -45,7 +45,7 @@
           </div>
 
           <!-- Login Form -->
-          <form id="login-form" class="mt-8 space-y-6">
+          <form id="login-form" class="mt-8 space-y-6" autocomplete="off">
             <div class="space-y-4">
               <div>
                 <label
@@ -58,6 +58,7 @@
                   name="name"
                   type="text"
                   required
+                  autocomplete="off"
                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter your full name"
                 />
@@ -74,6 +75,7 @@
                   name="student_id"
                   type="text"
                   required
+                  autocomplete="off"
                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter your student ID"
                 />
@@ -89,6 +91,7 @@
                   id="admin-password"
                   name="password"
                   type="password"
+                  autocomplete="new-password"
                   class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                   placeholder="Enter admin password"
                 />
@@ -826,7 +829,7 @@
                 preload="metadata"
                 crossorigin="anonymous"
                 controlsList="nodownload noplaybackrate noremoteplayback"
-                disablePictureInPicture              
+                disablePictureInPicture
               >
                 <source src="" type="video/mp4" />
                 Your browser does not support the video tag.

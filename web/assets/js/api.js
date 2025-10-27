@@ -4,9 +4,26 @@
  */
 
 class APIClient {
-  constructor(baseURL = "http://127.0.0.1:8000") {
+  constructor(baseURL = null) {
+    // Auto-detect API URL based on current page location
+    // This allows the app to work from any device (localhost, VR headset, etc.)
+    if (!baseURL) {
+      const protocol = window.location.protocol; // http: or https:
+      const hostname = window.location.hostname; // localhost, 192.168.1.x, etc.
+      const port = window.location.port || (protocol === "https:" ? "443" : "80");
+      
+      // If accessing via /static path, the API is on the same host
+      if (port === "8000" || window.location.pathname.startsWith("/static")) {
+        baseURL = `${protocol}//${hostname}:8000`;
+      } else {
+        // Fallback for different setups
+        baseURL = `${protocol}//${hostname}${port !== "80" && port !== "443" ? `:${port}` : ""}`;
+      }
+    }
+    
     this.baseURL = baseURL;
     this.currentStudent = null;
+    console.log(`🌐 API Client initialized with baseURL: ${this.baseURL}`);
   }
 
   /**

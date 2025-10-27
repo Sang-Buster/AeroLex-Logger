@@ -1,13 +1,13 @@
 # ASR Pipeline - Local Speech Recognition Service
 
-A robust, cross-platform automatic speech recognition (ASR) pipeline designed for continuous audio monitoring and transcription. Built for deployment on NVIDIA GPU equipped systems with local Whisper large-v3-turbo inference.
+A robust, cross-platform automatic speech recognition (ASR) pipeline designed for continuous audio monitoring and transcription. Built for deployment on any system (CPU or GPU) with local Whisper large-v3-turbo inference. Optimized for NVIDIA GPU acceleration when available.
 
 ## 🎯 Features
 
 - **Local Processing**: No cloud API calls - everything runs locally
 - **Real-time VAD**: Voice Activity Detection using Silero VAD
-- **GPU Acceleration**: Whisper large-v3-turbo with CUDA support
-- **Cross-Platform**: Works on both Windows and Linux
+- **GPU Acceleration**: Whisper large-v3-turbo with optional CUDA support (CPU mode also available)
+- **Cross-Platform**: Works on Windows, Linux, and macOS
 - **Persistent Service**: Auto-start and auto-restart capabilities
 - **Robust Audio Capture**: Automatic microphone failover and recovery
 - **JSON Logging**: Structured output with timestamps and confidence scores
@@ -79,12 +79,12 @@ Microphone → Audio Buffer → Silero VAD → Whisper large-v3-turbo → JSON L
 
 ### Prerequisites
 
-- **Hardware**: Compatible NVIDIA GPU
-- **OS**: Windows 10/11 or Linux (Ubuntu 20.04+ recommended)
-- **Python**: 3.10 (automatically managed by uv)
+- **Hardware**: NVIDIA GPU (optional but recommended for best performance), CPU-only mode supported
+- **OS**: Windows 10/11, Linux (Ubuntu 20.04+ recommended), or macOS
+- **Python**: 3.10+ (automatically managed by uv)
 - **Package Manager**: uv (automatically installed by setup scripts)
 - **Project Management**: Uses `pyproject.toml` for modern Python dependency management
-- **CUDA**: 11.8 or newer (for GPU acceleration)
+- **CUDA**: 12.1 or newer (optional, for GPU acceleration on Windows/Linux)
 - **Audio**: Working microphone input
 
 ### 1. Clone and Setup
@@ -106,6 +106,29 @@ uv run src/download_model.py
 # Test installation
 uv run src/test_installation.py
 ```
+
+### Optional: GPU Acceleration (Windows/Linux with NVIDIA GPU)
+
+By default, PyTorch installs with CPU support for cross-platform compatibility. If you have an NVIDIA GPU and want to enable GPU acceleration:
+
+```bash
+# After normal installation, reinstall PyTorch with CUDA support:
+uv pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# Verify GPU is available:
+python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
+```
+
+**Platform Notes:**
+
+- **Windows/Linux with NVIDIA GPU**: Follow the steps above for GPU acceleration (recommended for best performance)
+- **Mac**: CPU or Metal acceleration is automatically configured, no additional steps needed
+- **Linux without NVIDIA GPU**: CPU-only installation works out of the box
+
+**Performance Impact:**
+
+- **CPU**: ~5-10x slower inference, but works everywhere
+- **GPU**: Optimized for real-time transcription on NVIDIA GPUs (CUDA 12.1 recommended)
 
 ### 2. Test Installation
 

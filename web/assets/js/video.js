@@ -188,18 +188,21 @@ class VideoPlayerManager {
   }
 
   isVRVideo(video) {
-    // Check if video filename/title contains VR indicators
-    const vrIndicators = ["360", "vr", "360°", "panoramic", "spherical"];
-    const videoTitle = (video.title || "").toLowerCase();
-    const videoFilename = (video.filename || "").toLowerCase();
-    const videoUrl = (video.video_url || "").toLowerCase();
-
-    return vrIndicators.some(
-      (indicator) =>
-        videoTitle.includes(indicator) ||
-        videoFilename.includes(indicator) ||
-        videoUrl.includes(indicator),
-    );
+    // OPTION A: Make ALL videos show VR mode (no keyword check)
+    return true;
+    
+    // OPTION B: Check if video filename/title contains VR indicators (currently disabled)
+    // const vrIndicators = ["360", "vr", "360°", "panoramic", "spherical", "flight", "training"];
+    // const videoTitle = (video.title || "").toLowerCase();
+    // const videoFilename = (video.filename || "").toLowerCase();
+    // const videoUrl = (video.video_url || "").toLowerCase();
+    //
+    // return vrIndicators.some(
+    //   (indicator) =>
+    //     videoTitle.includes(indicator) ||
+    //     videoFilename.includes(indicator) ||
+    //     videoUrl.includes(indicator),
+    // );
   }
 
   setupRegularVideo(video) {

@@ -820,36 +820,57 @@
 
             <!-- Video player -->
             <div class="mb-6">
-              <!-- Regular video player -->
-              <video
-                id="video-player"
-                class="w-full bg-black rounded-lg"
-                style="max-height: 400px"
-                controls
-                preload="metadata"
-                crossorigin="anonymous"
-                controlsList="nodownload noplaybackrate noremoteplayback"
-                disablePictureInPicture
-              >
-                <source src="" type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
+              <!-- Regular video player (always visible for desktop controls) -->
+              <div class="relative">
+                <video
+                  id="video-player"
+                  class="w-full bg-black rounded-lg"
+                  style="max-height: 400px"
+                  controls
+                  preload="metadata"
+                  crossorigin="anonymous"
+                  controlsList="nodownload noplaybackrate noremoteplayback"
+                  disablePictureInPicture
+                >
+                  <source src="" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
 
-              <!-- VR video player (A-Frame) -->
+                <!-- VR Button Overlay (bottom-right corner) -->
+                <button
+                  id="enter-vr-button"
+                  class="hidden absolute top-4 right-4 px-4 py-2 bg-transparent text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-white/50 shadow-lg transition-all duration-200 hover:scale-105 flex items-center gap-2 z-10"
+                  title="View in VR Headset"
+                >
+                  <span class="font-semibold">View in VR</span>
+                </button>
+              </div>
+
+              <!-- Hidden A-Frame VR Scene (only visible when entering VR mode) -->
               <div
-                id="vr-player-container"
-                class="hidden w-full aspect-video bg-black rounded-lg"
+                id="vr-scene-container"
+                class="hidden fixed inset-0 z-50 bg-black"
               >
+                <!-- Exit VR Button (visible when in VR mode) -->
+                <button
+                  id="exit-vr-button"
+                  class="absolute top-4 right-4 px-4 py-2 bg-transparent text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 shadow-lg transition-all duration-200 hover:scale-105 flex items-center gap-2 z-[60]"
+                  title="Exit VR Mode (or press ESC)"
+                >
+                  <span class="text-xl"></span>
+                  <span class="font-semibold">Exit VR</span>
+                </button>
+
                 <a-scene
                   id="vr-scene"
                   embedded
-                  style="height: 100%; width: 100%"
+                  style="width: 100%; height: 100%"
                   background="color: #000000"
                   vr-mode-ui="enabled: true"
                   cursor="rayOrigin: mouse; fuse: false"
                   raycaster="objects: .raycastable"
                 >
-                  <!-- VR video sphere -->
+                  <!-- VR video sphere (synced with regular video) -->
                   <a-videosphere
                     id="vr-videosphere"
                     src=""
@@ -859,37 +880,12 @@
                     theta-length="180"
                   ></a-videosphere>
 
-                  <!-- VR controls -->
-                  <a-entity id="vr-controls" position="0 0 0">
-                    <!-- Play/Pause button -->
-                    <a-box
-                      class="raycastable"
-                      id="vr-play-button"
-                      position="0 -2 -5"
-                      width="1"
-                      height="0.5"
-                      depth="0.1"
-                      color="#4CAF50"
-                      text="value: ▶ PLAY; align: center; color: white; width: 10"
-                    ></a-box>
-                  </a-entity>
-
                   <!-- Camera -->
                   <a-camera
                     look-controls="enabled: true"
                     wasd-controls="enabled: false"
                   ></a-camera>
                 </a-scene>
-              </div>
-
-              <!-- VR Mode Toggle Button -->
-              <div class="mt-2 flex justify-center">
-                <button
-                  id="toggle-vr-mode"
-                  class="hidden px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500"
-                >
-                  🥽 Switch to VR Mode
-                </button>
               </div>
             </div>
 

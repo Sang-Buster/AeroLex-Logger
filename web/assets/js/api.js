@@ -7,11 +7,17 @@ class APIClient {
   constructor(baseURL = null) {
     // Auto-detect API URL based on current page location
     // This allows the app to work from any device (localhost, VR headset, etc.)
+    //
+    // Examples:
+    //   - Desktop: http://localhost:8000/static → http://localhost:8000
+    //   - VR headset: https://192.168.1.100:8000/static → https://192.168.1.100:8000
+    //   - VR in browser: http://localhost:8000/static → http://localhost:8000 (WebXR works on localhost without HTTPS)
     if (!baseURL) {
       const protocol = window.location.protocol; // http: or https:
       const hostname = window.location.hostname; // localhost, 192.168.1.x, etc.
-      const port = window.location.port || (protocol === "https:" ? "443" : "80");
-      
+      const port =
+        window.location.port || (protocol === "https:" ? "443" : "80");
+
       // If accessing via /static path, the API is on the same host
       if (port === "8000" || window.location.pathname.startsWith("/static")) {
         baseURL = `${protocol}//${hostname}:8000`;
@@ -20,7 +26,7 @@ class APIClient {
         baseURL = `${protocol}//${hostname}${port !== "80" && port !== "443" ? `:${port}` : ""}`;
       }
     }
-    
+
     this.baseURL = baseURL;
     this.currentStudent = null;
     console.log(`🌐 API Client initialized with baseURL: ${this.baseURL}`);

@@ -39,7 +39,8 @@ class VideoPlayerManager {
     const closeModalBtn = document.getElementById("close-modal");
     const startRecordingBtn = document.getElementById("start-recording");
     const stopRecordingBtn = document.getElementById("stop-recording");
-    const toggleVRBtn = document.getElementById("toggle-vr-mode");
+    const enterVRBtn = document.getElementById("enter-vr-button");
+    const exitVRBtn = document.getElementById("exit-vr-button");
 
     if (closeModalBtn) {
       closeModalBtn.addEventListener("click", () => this.closeVideo());
@@ -53,8 +54,12 @@ class VideoPlayerManager {
       stopRecordingBtn.addEventListener("click", () => this.stopRecording());
     }
 
-    if (toggleVRBtn) {
-      toggleVRBtn.addEventListener("click", () => this.toggleVRMode());
+    if (enterVRBtn) {
+      enterVRBtn.addEventListener("click", () => this.enterVRMode());
+    }
+
+    if (exitVRBtn) {
+      exitVRBtn.addEventListener("click", () => this.exitVRMode());
     }
 
     // Video player events
@@ -93,7 +98,13 @@ class VideoPlayerManager {
       if (this.currentVideo) {
         switch (e.key) {
           case "Escape":
-            this.closeVideo();
+            // Exit VR mode if active, otherwise close video
+            if (this.isVRMode) {
+              e.preventDefault();
+              this.exitVRMode();
+            } else {
+              this.closeVideo();
+            }
             break;
           case " ":
             if (
@@ -175,22 +186,68 @@ class VideoPlayerManager {
   }
 
   loadVideo(video) {
-    // Detect if this is a VR video (360 video)
-    const isVRVideo = this.isVRVideo(video);
+    const videoPlayer = document.getElementById("video-player");
+    const vrVideosphere = document.getElementById("vr-videosphere");
 
+    if (!videoPlayer) return;
+
+    // Always load the regular video player
+    videoPlayer.src = video.video_url;
+
+    // Wrap video loading in promise to catch all errors
+    const loadVideoAsync = async () => {
+      try {
+        videoPlayer.load();
+
+        // Handle any pending play promises
+        if (videoPlayer.readyState >= 2) {
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve) => {
+          const onCanPlay = () => {
+            videoPlayer.removeEventListener("canplay", onCanPlay);
+            videoPlayer.removeEventListener("error", onError);
+            resolve();
+          };
+
+          const onError = (error) => {
+            videoPlayer.removeEventListener("canplay", onCanPlay);
+            videoPlayer.removeEventListener("error", onError);
+            console.warn("⚠️ Video load error:", error);
+            resolve(); // Don't reject, just resolve to continue
+          };
+
+          videoPlayer.addEventListener("canplay", onCanPlay);
+          videoPlayer.addEventListener("error", onError);
+        });
+      } catch (error) {
+        console.warn("⚠️ Video load error:", error);
+      }
+    };
+
+    loadVideoAsync().catch((error) => {
+      console.warn("⚠️ Video loading failed:", error);
+    });
+
+    // Setup VR videosphere with the same source (for VR headset viewing)
+    if (vrVideosphere) {
+      vrVideosphere.setAttribute("src", video.video_url);
+    }
+
+    // Detect if this is a VR/360 video and show VR button
+    const isVRVideo = this.isVRVideo(video);
     if (isVRVideo) {
-      this.setupVRVideo(video);
-      this.showVRToggleButton();
+      this.showVRButton();
     } else {
-      this.setupRegularVideo(video);
-      this.hideVRToggleButton();
+      this.hideVRButton();
     }
   }
 
   isVRVideo(video) {
     // OPTION A: Make ALL videos show VR mode (no keyword check)
     return true;
-    
+
     // OPTION B: Check if video filename/title contains VR indicators (currently disabled)
     // const vrIndicators = ["360", "vr", "360°", "panoramic", "spherical", "flight", "training"];
     // const videoTitle = (video.title || "").toLowerCase();
@@ -205,190 +262,268 @@ class VideoPlayerManager {
     // );
   }
 
-  setupRegularVideo(video) {
+  /**
+   * Enter VR mode - Uses A-Frame's VR presentation API
+   * Regular video stays visible on desktop for controls
+   * VR scene shows in headset for immersive viewing
+   */
+  async enterVRMode() {
+    const scene = document.getElementById("vr-scene");
+    const sceneContainer = document.getElementById("vr-scene-container");
     const videoPlayer = document.getElementById("video-player");
-    const vrContainer = document.getElementById("vr-player-container");
-
-    if (videoPlayer && vrContainer) {
-      videoPlayer.classList.remove("hidden");
-      vrContainer.classList.add("hidden");
-
-      // Set video source and handle loading gracefully
-      videoPlayer.src = video.video_url;
-
-      // Wrap video loading in promise to catch all errors
-      const loadVideo = async () => {
-        try {
-          videoPlayer.load();
-
-          // Handle any pending play promises
-          if (videoPlayer.readyState >= 2) {
-            return Promise.resolve();
-          }
-
-          return new Promise((resolve, reject) => {
-            const onCanPlay = () => {
-              videoPlayer.removeEventListener("canplay", onCanPlay);
-              videoPlayer.removeEventListener("error", onError);
-              resolve();
-            };
-
-            const onError = (error) => {
-              videoPlayer.removeEventListener("canplay", onCanPlay);
-              videoPlayer.removeEventListener("error", onError);
-              console.warn("⚠️ Video load error:", error);
-              resolve(); // Don't reject, just resolve to continue
-            };
-
-            videoPlayer.addEventListener("canplay", onCanPlay);
-            videoPlayer.addEventListener("error", onError);
-          });
-        } catch (error) {
-          console.warn("⚠️ Video load error:", error);
-        }
-      };
-
-      loadVideo().catch((error) => {
-        console.warn("⚠️ Video loading failed:", error);
-      });
-
-      this.isVRMode = false;
-    }
-  }
-
-  setupVRVideo(video) {
-    const videoPlayer = document.getElementById("video-player");
-    const vrContainer = document.getElementById("vr-player-container");
     const vrVideosphere = document.getElementById("vr-videosphere");
 
-    if (videoPlayer && vrContainer && vrVideosphere) {
-      // Initially show regular video player
-      videoPlayer.classList.remove("hidden");
-      vrContainer.classList.add("hidden");
-      videoPlayer.src = video.video_url;
-      videoPlayer.load();
-
-      // Set up VR videosphere src
-      vrVideosphere.setAttribute("src", video.video_url);
-      this.isVRMode = false;
+    if (!scene || !sceneContainer || !videoPlayer || !vrVideosphere) {
+      console.warn("⚠️ VR scene elements not found");
+      this.showNotification("VR scene not available", "error");
+      return;
     }
-  }
 
-  toggleVRMode() {
-    const videoPlayer = document.getElementById("video-player");
-    const vrContainer = document.getElementById("vr-player-container");
-    const toggleBtn = document.getElementById("toggle-vr-mode");
-    const vrVideosphere = document.getElementById("vr-videosphere");
+    if (!videoPlayer.src) {
+      console.warn("⚠️ No video loaded");
+      this.showNotification("Please wait for video to load", "warning");
+      return;
+    }
 
-    if (!videoPlayer || !vrContainer || !toggleBtn || !vrVideosphere) return;
+    try {
+      console.log("🥽 Entering VR mode...");
 
-    if (this.isVRMode) {
-      // Switch to regular video
-      const currentTime = this.vrVideo ? this.vrVideo.currentTime : 0;
-      const paused = this.vrVideo ? this.vrVideo.paused : true;
-
-      videoPlayer.classList.remove("hidden");
-      vrContainer.classList.add("hidden");
-
-      if (currentTime > 0) {
-        videoPlayer.currentTime = currentTime;
-      }
-      if (!paused) {
-        const playPromise = videoPlayer.play();
-        if (playPromise !== undefined) {
-          playPromise.catch((error) => {
-            console.warn("⚠️ Video resume play failed:", error);
-          });
-        }
-      }
-
-      toggleBtn.textContent = "🥽 Switch to VR Mode";
-      this.isVRMode = false;
-    } else {
-      // Switch to VR mode
+      // Sync VR video with regular video before entering VR
       const currentTime = videoPlayer.currentTime;
       const paused = videoPlayer.paused;
 
-      videoPlayer.classList.add("hidden");
-      vrContainer.classList.remove("hidden");
+      // Make scene visible
+      sceneContainer.classList.remove("hidden");
 
-      // Get the video element from A-Frame
-      setTimeout(() => {
-        this.vrVideo = vrVideosphere.components.material.material.map.image;
-        if (this.vrVideo && currentTime > 0) {
-          this.vrVideo.currentTime = currentTime;
+      // Ensure videosphere has the correct source
+      const videoUrl = videoPlayer.src;
+      console.log("📹 Setting VR video source:", videoUrl);
+      vrVideosphere.setAttribute("src", videoUrl);
+
+      // Wait for scene to be ready
+      await new Promise((resolve) => {
+        if (scene.hasLoaded) {
+          resolve();
+        } else {
+          scene.addEventListener("loaded", resolve, { once: true });
+          // Timeout fallback
+          setTimeout(resolve, 2000);
         }
-        if (this.vrVideo && !paused) {
-          const playPromise = this.vrVideo.play();
+      });
+
+      // Wait a moment for the videosphere to process the video
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      // Get the actual video element from A-Frame videosphere
+      this.vrVideo = vrVideosphere.components?.material?.material?.map?.image;
+
+      if (!this.vrVideo) {
+        console.error("❌ Failed to get VR video element");
+        throw new Error("VR video element not found");
+      }
+
+      console.log("✅ VR video element found");
+
+      // Sync time and playback state
+      this.vrVideo.currentTime = currentTime;
+
+      // Make sure video plays if it was playing
+      if (!paused) {
+        console.log("▶️ Playing VR video");
+        const playPromise = this.vrVideo.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => {
+            console.warn("⚠️ VR video play failed:", error);
+            this.showNotification(
+              "Click on the video to start playback",
+              "info",
+            );
+          });
+        }
+      }
+
+      // Set up continuous sync between regular video and VR video
+      this.setupVRVideoSync();
+
+      this.isVRMode = true;
+      console.log("✅ VR mode active");
+
+      // Enter VR presentation mode if headset available
+      if (scene.hasWebXR) {
+        scene.enterVR();
+        console.log("🥽 Entered VR headset mode");
+
+        // Listen for VR exit
+        scene.addEventListener(
+          "exit-vr",
+          () => {
+            this.exitVRMode();
+          },
+          { once: true },
+        );
+      } else {
+        console.log("🖥️ VR mode active (no WebXR headset detected)");
+        this.showNotification("VR mode active (press ESC to exit)", "info");
+      }
+    } catch (error) {
+      console.error("❌ Error entering VR mode:", error);
+      this.showNotification(
+        "Failed to enter VR mode: " + error.message,
+        "error",
+      );
+      sceneContainer.classList.add("hidden");
+      this.isVRMode = false;
+    }
+  }
+
+  /**
+   * Exit VR mode - Called automatically when user exits VR in headset or clicks exit button
+   */
+  exitVRMode() {
+    if (!this.isVRMode) {
+      return; // Already exited
+    }
+
+    console.log("🚪 Exiting VR mode...");
+
+    const scene = document.getElementById("vr-scene");
+    const sceneContainer = document.getElementById("vr-scene-container");
+    const videoPlayer = document.getElementById("video-player");
+
+    // Exit VR presentation mode if active
+    if (scene && scene.is && scene.is("vr-mode")) {
+      try {
+        scene.exitVR();
+      } catch (error) {
+        console.warn("⚠️ Error exiting VR presentation:", error);
+      }
+    }
+
+    // Hide VR scene
+    if (sceneContainer) {
+      sceneContainer.classList.add("hidden");
+    }
+
+    // Clear VR video sync
+    if (this.vrSyncInterval) {
+      clearInterval(this.vrSyncInterval);
+      this.vrSyncInterval = null;
+    }
+
+    // Sync back to regular video
+    if (this.vrVideo && videoPlayer) {
+      try {
+        const vrTime = this.vrVideo.currentTime;
+        const vrPaused = this.vrVideo.paused;
+
+        if (!isNaN(vrTime)) {
+          videoPlayer.currentTime = vrTime;
+        }
+
+        if (!vrPaused && videoPlayer.paused) {
+          const playPromise = videoPlayer.play();
           if (playPromise !== undefined) {
             playPromise.catch((error) => {
-              console.warn("⚠️ VR video resume play failed:", error);
+              console.warn("⚠️ Video play failed:", error);
             });
           }
         }
-      }, 100);
-
-      toggleBtn.textContent = "📺 Switch to Regular Mode";
-      this.isVRMode = true;
+      } catch (error) {
+        console.warn("⚠️ Error syncing video on exit:", error);
+      }
     }
+
+    this.isVRMode = false;
+    this.vrVideo = null;
+    console.log("✅ Exited VR mode");
+    this.showNotification("Exited VR mode", "info");
+  }
+
+  /**
+   * Sync regular video controls with VR video
+   * Allows desktop controls to work while in VR headset
+   */
+  setupVRVideoSync() {
+    const videoPlayer = document.getElementById("video-player");
+
+    if (!videoPlayer || !this.vrVideo) return;
+
+    // Clear any existing sync
+    if (this.vrSyncInterval) {
+      clearInterval(this.vrSyncInterval);
+    }
+
+    // Sync play/pause from regular video to VR video
+    const syncPlayPause = () => {
+      if (!this.vrVideo || !videoPlayer) return;
+
+      if (videoPlayer.paused && !this.vrVideo.paused) {
+        this.vrVideo.pause();
+      } else if (!videoPlayer.paused && this.vrVideo.paused) {
+        const playPromise = this.vrVideo.play();
+        if (playPromise !== undefined) {
+          playPromise.catch((error) => {
+            console.warn("⚠️ VR video sync play failed:", error);
+          });
+        }
+      }
+    };
+
+    // Sync seeking from regular video to VR video
+    const syncSeeking = () => {
+      if (!this.vrVideo || !videoPlayer) return;
+
+      const timeDiff = Math.abs(
+        videoPlayer.currentTime - this.vrVideo.currentTime,
+      );
+      if (timeDiff > 0.5) {
+        // Only sync if difference is significant
+        this.vrVideo.currentTime = videoPlayer.currentTime;
+      }
+    };
+
+    videoPlayer.addEventListener("play", syncPlayPause);
+    videoPlayer.addEventListener("pause", syncPlayPause);
+    videoPlayer.addEventListener("seeked", syncSeeking);
+
+    // Periodic sync to handle any drift
+    this.vrSyncInterval = setInterval(() => {
+      syncPlayPause();
+      syncSeeking();
+    }, 500);
   }
 
   setupVRControls() {
-    // Set up A-Frame VR controls when available
-    document.addEventListener("DOMContentLoaded", () => {
-      const playButton = document.getElementById("vr-play-button");
-      if (playButton) {
-        playButton.addEventListener("click", () => {
-          if (this.vrVideo) {
-            if (this.vrVideo.paused) {
-              const playPromise = this.vrVideo.play();
-              if (playPromise !== undefined) {
-                playPromise
-                  .then(() => {
-                    playButton.setAttribute(
-                      "text",
-                      "value: ⏸ PAUSE; align: center; color: white; width: 10",
-                    );
-                  })
-                  .catch((error) => {
-                    console.warn("⚠️ VR control play failed:", error);
-                  });
-              } else {
-                playButton.setAttribute(
-                  "text",
-                  "value: ⏸ PAUSE; align: center; color: white; width: 10",
-                );
-              }
-            } else {
-              this.vrVideo.pause();
-              playButton.setAttribute(
-                "text",
-                "value: ▶ PLAY; align: center; color: white; width: 10",
-              );
-            }
-          }
-        });
-      }
-    });
+    // VR controls are handled through desktop video player
+    // No in-headset controls needed since desktop controls work
   }
 
-  showVRToggleButton() {
-    const toggleBtn = document.getElementById("toggle-vr-mode");
-    if (toggleBtn) {
-      toggleBtn.classList.remove("hidden");
+  showVRButton() {
+    const enterVRBtn = document.getElementById("enter-vr-button");
+    if (enterVRBtn) {
+      enterVRBtn.classList.remove("hidden");
     }
   }
 
-  hideVRToggleButton() {
-    const toggleBtn = document.getElementById("toggle-vr-mode");
-    if (toggleBtn) {
-      toggleBtn.classList.add("hidden");
+  hideVRButton() {
+    const enterVRBtn = document.getElementById("enter-vr-button");
+    if (enterVRBtn) {
+      enterVRBtn.classList.add("hidden");
     }
   }
 
   async closeVideo(options = {}) {
     const { silentStop = false } = options;
     console.log("🔚 Closing video");
+
+    // Exit VR mode if active
+    if (this.isVRMode) {
+      const scene = document.getElementById("vr-scene");
+      if (scene && scene.is("vr-mode")) {
+        scene.exitVR();
+      }
+      this.exitVRMode();
+    }
 
     // Stop recording if active
     await this.stopRecordingIfActive({ silent: silentStop });
@@ -1080,30 +1215,19 @@ class VideoPlayerManager {
   }
 
   toggleVideoPlayback() {
-    if (this.isVRMode && this.vrVideo) {
-      if (this.vrVideo.paused) {
-        const playPromise = this.vrVideo.play();
+    // Always control the regular video player
+    // VR video will sync automatically if VR mode is active
+    const videoPlayer = document.getElementById("video-player");
+    if (videoPlayer) {
+      if (videoPlayer.paused) {
+        const playPromise = videoPlayer.play();
         if (playPromise !== undefined) {
           playPromise.catch((error) => {
-            console.warn("⚠️ VR video play failed:", error);
+            console.warn("⚠️ Video play failed:", error);
           });
         }
       } else {
-        this.vrVideo.pause();
-      }
-    } else {
-      const videoPlayer = document.getElementById("video-player");
-      if (videoPlayer) {
-        if (videoPlayer.paused) {
-          const playPromise = videoPlayer.play();
-          if (playPromise !== undefined) {
-            playPromise.catch((error) => {
-              console.warn("⚠️ Video play failed:", error);
-            });
-          }
-        } else {
-          videoPlayer.pause();
-        }
+        videoPlayer.pause();
       }
     }
   }

@@ -32,18 +32,24 @@ def main():
     print(f"📁 Working directory: {backend_dir}")
 
     if use_https:
-        print("🔒 HTTPS enabled (required for VR headset access)")
+        print("🔒 HTTPS enabled (for VR headset network access)")
         print("🌐 Web interface: https://localhost:8000/static")
         print("📖 API docs: https://localhost:8000/docs")
         print(
             "⚠️  You may see a security warning - click 'Advanced' and proceed (self-signed cert)"
         )
+        print()
+        print("🥽 VR Mode:")
+        print("   • Desktop testing: Works on http://localhost (no cert needed)")
+        print("   • VR headset: Requires HTTPS via https://YOUR_IP:8000 (cert needed)")
     else:
-        print("⚠️  Running on HTTP - VR headset access will NOT work!")
-        print("🔒 To enable HTTPS (required for VR), run:")
-        print("   python3 generate_cert.py")
         print("🌐 Web interface: http://localhost:8000/static")
         print("📖 API docs: http://localhost:8000/docs")
+        print()
+        print("🥽 VR Mode:")
+        print("   • Desktop testing: Works on http://localhost ✅")
+        print("   • VR headset network access: Requires HTTPS ⚠️")
+        print("   • To enable VR headset access, run: python3 generate_cert.py")
     print()
 
     try:

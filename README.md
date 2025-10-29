@@ -112,9 +112,8 @@ uv run src/test_installation.py
 By default, PyTorch installs with CPU support for cross-platform compatibility. If you have an NVIDIA GPU and want to enable GPU acceleration:
 
 ```bash
-# After normal installation, reinstall PyTorch with CUDA support:
-uv pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121
-
+# Reinstall PyTorch with CUDA support on Linux/Mac
+uv pip install  --reinstall torch torchaudio torchvision
 # Verify GPU is available:
 python -c "import torch; print(f'PyTorch: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')"
 ```

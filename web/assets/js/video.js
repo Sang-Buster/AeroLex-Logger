@@ -193,11 +193,17 @@ class VideoPlayerManager {
 
     // Always load the regular video player
     videoPlayer.src = video.video_url;
+    
+    // Explicitly pause to prevent autoplay
+    videoPlayer.pause();
 
     // Wrap video loading in promise to catch all errors
     const loadVideoAsync = async () => {
       try {
         videoPlayer.load();
+        
+        // Ensure video is paused after loading
+        videoPlayer.pause();
 
         // Handle any pending play promises
         if (videoPlayer.readyState >= 2) {
@@ -208,6 +214,8 @@ class VideoPlayerManager {
           const onCanPlay = () => {
             videoPlayer.removeEventListener("canplay", onCanPlay);
             videoPlayer.removeEventListener("error", onError);
+            // Make sure video doesn't autoplay
+            videoPlayer.pause();
             resolve();
           };
 
@@ -233,6 +241,15 @@ class VideoPlayerManager {
     // Setup VR videosphere with the same source (for VR headset viewing)
     if (vrVideosphere) {
       vrVideosphere.setAttribute("src", video.video_url);
+      vrVideosphere.setAttribute("autoplay", "false");
+      
+      // Also pause the underlying video element if accessible
+      setTimeout(() => {
+        const vrVideoEl = vrVideosphere.components?.material?.material?.map?.image;
+        if (vrVideoEl && typeof vrVideoEl.pause === 'function') {
+          vrVideoEl.pause();
+        }
+      }, 100);
     }
 
     // Detect if this is a VR/360 video and show VR button

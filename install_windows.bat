@@ -93,6 +93,7 @@ echo Installing Python dependencies with uv...
 echo This may take several minutes...
 cd /d "%ASR_DIR%"
 uv sync
+uv pip install torch torchaudio torchvision --index-url https://download.pytorch.org/whl/cu121
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install dependencies
     echo This may be due to:

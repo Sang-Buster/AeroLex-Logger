@@ -129,14 +129,7 @@ class VideoPlayerManager {
   async openVideo(video) {
     console.log("🎬 Opening video:", video.title);
 
-    // Check access
-    if (!video.unlocked) {
-      this.showNotification(
-        "This video is locked. Complete previous videos first.",
-        "warning",
-      );
-      return;
-    }
+    // No access check - all videos are unlocked
 
     const student = window.getCurrentStudent();
     if (!student) {
@@ -193,7 +186,7 @@ class VideoPlayerManager {
 
     // Always load the regular video player
     videoPlayer.src = video.video_url;
-    
+
     // Explicitly pause to prevent autoplay
     videoPlayer.pause();
 
@@ -201,7 +194,7 @@ class VideoPlayerManager {
     const loadVideoAsync = async () => {
       try {
         videoPlayer.load();
-        
+
         // Ensure video is paused after loading
         videoPlayer.pause();
 
@@ -242,11 +235,12 @@ class VideoPlayerManager {
     if (vrVideosphere) {
       vrVideosphere.setAttribute("src", video.video_url);
       vrVideosphere.setAttribute("autoplay", "false");
-      
+
       // Also pause the underlying video element if accessible
       setTimeout(() => {
-        const vrVideoEl = vrVideosphere.components?.material?.material?.map?.image;
-        if (vrVideoEl && typeof vrVideoEl.pause === 'function') {
+        const vrVideoEl =
+          vrVideosphere.components?.material?.material?.map?.image;
+        if (vrVideoEl && typeof vrVideoEl.pause === "function") {
           vrVideoEl.pause();
         }
       }, 100);
@@ -544,6 +538,27 @@ class VideoPlayerManager {
 
     // Stop recording if active
     await this.stopRecordingIfActive({ silent: silentStop });
+
+    // Stop and cleanup video playback
+    const videoPlayer = document.getElementById("video-player");
+    if (videoPlayer) {
+      videoPlayer.pause();
+      videoPlayer.currentTime = 0;
+      videoPlayer.src = "";
+      videoPlayer.load(); // Ensure resources are released
+    }
+
+    // Stop VR video if exists
+    const vrVideosphere = document.getElementById("vr-videosphere");
+    if (vrVideosphere) {
+      vrVideosphere.setAttribute("src", "");
+      const vrVideoEl =
+        vrVideosphere.components?.material?.material?.map?.image;
+      if (vrVideoEl && typeof vrVideoEl.pause === "function") {
+        vrVideoEl.pause();
+        vrVideoEl.src = "";
+      }
+    }
 
     // Complete session if active
     if (this.currentSession && this.videoStartTime) {

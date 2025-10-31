@@ -114,15 +114,27 @@ class AuthManager {
       return;
     }
 
-    // Validate admin password if provided
-    if (password && studentId.toLowerCase() !== "admin") {
-      this.showMessage("Password is only for admin login", "error");
-      return;
-    }
+    // Check if this is an admin login
+    const isAdminLogin = studentId.toLowerCase() === "admin";
 
-    if (studentId.toLowerCase() === "admin" && !password) {
-      this.showMessage("Admin password is required", "error");
-      return;
+    // Validate admin login
+    if (isAdminLogin) {
+      if (!password) {
+        this.showMessage("Admin password is required", "error");
+        return;
+      }
+    } else {
+      // Validate student ID is exactly 7 digits (for non-admin users)
+      if (!/^\d{7}$/.test(studentId)) {
+        this.showMessage("Student ID must be exactly 7 digits", "error");
+        return;
+      }
+
+      // Ensure password is not provided for regular students
+      if (password) {
+        this.showMessage("Password is only for admin login", "error");
+        return;
+      }
     }
 
     // Show loading state

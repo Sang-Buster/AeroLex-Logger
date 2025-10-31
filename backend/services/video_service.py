@@ -211,10 +211,8 @@ class VideoService:
                 avg_score = float(video.get("best_score") or 0.0)
                 matched_messages = 0
 
-            # Always unlock the first video (order_index = 1)
-            is_unlocked = bool(video.get("unlocked") or False)
-            if video["order_index"] == 1:
-                is_unlocked = True
+            # All videos are unlocked - no locking logic
+            is_unlocked = True
 
             result.append(
                 {
@@ -304,41 +302,9 @@ class VideoService:
 
     @staticmethod
     async def check_video_access(student_id: str, video_id: str) -> bool:
-        """Check if student has access to a specific video"""
-        async with await DatabaseManager.get_connection() as db:
-            async with db.execute(
-                """
-                SELECT unlocked FROM video_progress 
-                WHERE student_id = ? AND video_id = ?
-            """,
-                (student_id, video_id),
-            ) as cursor:
-                result = await cursor.fetchone()
-
-                if result:
-                    return bool(result[0])
-
-                # If no record exists, check if this is the first video
-                async with db.execute(
-                    """
-                    SELECT order_index FROM videos WHERE id = ?
-                """,
-                    (video_id,),
-                ) as cursor:
-                    video_result = await cursor.fetchone()
-                    if video_result and video_result[0] == 1:
-                        # First video should be accessible, create the record
-                        await db.execute(
-                            """
-                            INSERT OR REPLACE INTO video_progress (student_id, video_id, unlocked)
-                            VALUES (?, ?, TRUE)
-                        """,
-                            (student_id, video_id),
-                        )
-                        await db.commit()
-                        return True
-
-                return False
+        """Check if student has access to a specific video - All videos unlocked"""
+        # All videos are accessible - no locking logic
+        return True
 
     @staticmethod
     def get_video_file_path(filename: str) -> Optional[Path]:

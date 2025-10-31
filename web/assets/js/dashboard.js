@@ -142,16 +142,11 @@ class DashboardManager {
       "bg-white rounded-lg shadow-md overflow-hidden transition-all duration-200 hover:shadow-lg";
     card.dataset.videoId = video.id;
 
-    // Add hover and accessibility enhancements
-    if (video.unlocked) {
-      card.className += " hover:shadow-xl hover:scale-[1.02] cursor-pointer";
-      card.setAttribute("tabindex", "0");
-      card.setAttribute("role", "button");
-      card.setAttribute("aria-label", `Open ${video.title} video`);
-    } else {
-      card.className += " opacity-75";
-      card.setAttribute("aria-label", `${video.title} - Locked`);
-    }
+    // Always allow access - no locking logic
+    card.className += " hover:shadow-xl hover:scale-[1.02] cursor-pointer";
+    card.setAttribute("tabindex", "0");
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `Open ${video.title} video`);
 
     const thumbnail = this.createVideoThumbnail(video, index);
     const info = this.createVideoInfo(video);
@@ -159,23 +154,18 @@ class DashboardManager {
     card.appendChild(thumbnail);
     card.appendChild(info);
 
-    // Add click handler
-    if (video.unlocked) {
-      const handleOpen = () => {
-        window.videoPlayer?.openVideo(video);
-      };
+    // Add click handler - always enabled
+    const handleOpen = () => {
+      window.videoPlayer?.openVideo(video);
+    };
 
-      card.addEventListener("click", handleOpen);
-      card.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleOpen();
-        }
-      });
-    } else {
-      // Locked video - do nothing on click (no notification)
-      card.style.cursor = "not-allowed";
-    }
+    card.addEventListener("click", handleOpen);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        handleOpen();
+      }
+    });
 
     return card;
   }
@@ -207,51 +197,21 @@ class DashboardManager {
 
     thumbnail.appendChild(thumbnailImage);
 
-    // Create overlay container
+    // Create overlay container - always show play button
     const overlay = document.createElement("div");
     overlay.className =
       "absolute inset-0 flex items-center justify-center bg-black bg-opacity-20 group-hover:bg-opacity-10 transition-all";
 
-    if (video.completed) {
-      // Completed video - show play button with green tint
-      const playIcon = document.createElement("div");
-      playIcon.className =
-        "bg-green-500 bg-opacity-95 rounded-full p-3 transform group-hover:scale-110 transition-transform shadow-lg";
-      playIcon.innerHTML = `
-                <svg class="h-6 w-6 text-white ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z"/>
-                </svg>
-            `;
-      overlay.appendChild(playIcon);
-    } else if (video.unlocked) {
-      // Unlocked video - show play button
-      const playIcon = document.createElement("div");
-      playIcon.className =
-        "bg-white bg-opacity-95 rounded-full p-3 transform group-hover:scale-110 transition-transform shadow-lg";
-      playIcon.innerHTML = `
-                <svg class="h-6 w-6 text-gray-800 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z"/>
-                </svg>
-            `;
-      overlay.appendChild(playIcon);
-    } else {
-      // Locked video - show lock overlay
-      const lockOverlay = document.createElement("div");
-      lockOverlay.className =
-        "absolute inset-0 bg-black bg-opacity-60 flex items-center justify-center";
-
-      const lockIcon = document.createElement("div");
-      lockIcon.className =
-        "bg-white bg-opacity-90 rounded-full p-2.5 shadow-lg";
-      lockIcon.innerHTML = `
-                <svg class="h-5 w-5 text-gray-700" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/>
-                </svg>
-            `;
-
-      lockOverlay.appendChild(lockIcon);
-      overlay.appendChild(lockOverlay);
-    }
+    // Always show unlocked play button
+    const playIcon = document.createElement("div");
+    playIcon.className =
+      "bg-white bg-opacity-95 rounded-full p-3 transform group-hover:scale-110 transition-transform shadow-lg";
+    playIcon.innerHTML = `
+            <svg class="h-6 w-6 text-gray-800 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z"/>
+            </svg>
+        `;
+    overlay.appendChild(playIcon);
 
     thumbnail.appendChild(overlay);
 
@@ -269,74 +229,11 @@ class DashboardManager {
     const info = document.createElement("div");
     info.className = "p-4";
 
-    // Top row with equal-width badges (4 badges now)
-    const badgesRow = document.createElement("div");
-    badgesRow.className = "video-badges-row";
-
-    // Best Score badge (per-video score) - color based on score
-    const scoreBadge = document.createElement("span");
-    if (video.best_score > 0) {
-      const scorePercent = (video.best_score * 100).toFixed(2);
-      const numericScore = parseFloat(scorePercent);
-      const scoreBadgeClass = this.getScoreBadgeClass(numericScore);
-      scoreBadge.className = `score-badge ${scoreBadgeClass}`;
-      scoreBadge.textContent = `🏆 ${scorePercent}%`;
-      scoreBadge.setAttribute(
-        "title",
-        `Best score for this video: ${scorePercent}%`,
-      );
-    } else {
-      scoreBadge.className = "score-badge score-badge-none";
-      scoreBadge.textContent = "No Score";
-      scoreBadge.setAttribute("title", "No attempts yet");
-    }
-
-    // Attempts badge (number of tries) - purple like Total Attempts
-    const attemptsBadge = document.createElement("span");
-    attemptsBadge.className = "status-badge attempts-badge";
-    const attempts = video.attempts || 0;
-    attemptsBadge.innerHTML = `📝 ${attempts}x`;
-    attemptsBadge.setAttribute(
-      "title",
-      `${attempts} attempt${attempts !== 1 ? "s" : ""}`,
-    );
-
-    // Status badge
-    const statusBadge = document.createElement("span");
-    statusBadge.className = "status-badge";
-
-    if (video.completed) {
-      statusBadge.className += " bg-green-100 text-green-700";
-      statusBadge.innerHTML = "✅ Done";
-    } else if (video.unlocked) {
-      statusBadge.className += " bg-blue-100 text-blue-700";
-      statusBadge.innerHTML = "🔓 Open";
-    } else {
-      statusBadge.className += " bg-gray-100 text-gray-700";
-      statusBadge.innerHTML = "🔒 Locked";
-    }
-
-    // Time spent badge (actual time from sessions) - yellow like Time Spent
-    const timeBadge = document.createElement("span");
-    timeBadge.className = "time-badge";
-    const timeMinutes = video.time_spent_minutes || 0;
-    timeBadge.innerHTML = `⏱️ ${timeMinutes}m`;
-    timeBadge.setAttribute(
-      "title",
-      `${timeMinutes} minutes spent on this video`,
-    );
-
-    badgesRow.appendChild(scoreBadge);
-    badgesRow.appendChild(attemptsBadge);
-    badgesRow.appendChild(statusBadge);
-    badgesRow.appendChild(timeBadge);
-
-    // Video Title (clean, below badges)
+    // Video Title (only show title, no badges)
     const videoTitle = document.createElement("h4");
     videoTitle.className = "font-semibold text-gray-900 text-sm leading-tight";
     videoTitle.textContent = video.title;
 
-    info.appendChild(badgesRow);
     info.appendChild(videoTitle);
 
     return info;

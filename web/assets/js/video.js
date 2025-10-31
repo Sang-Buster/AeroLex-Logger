@@ -21,6 +21,16 @@ class VideoPlayerManager {
     this.isHotkeyPressed = false;
     this.useDualASR = true; // Use dual ASR system by default
     this.activeRecordingStudentId = null;
+
+    // Video completion tracking
+    this.videoWatchStartTime = null;
+    this.totalWatchTime = 0;
+    this.sessionSimilarityScores = [];
+
+    // Thresholds from config
+    this.MIN_SIMILARITY_PERCENTAGE = 50; // Can be loaded from backend config
+    this.MIN_VIDEO_WATCH_PERCENTAGE = 90; // Can be loaded from backend config
+
     this.init();
   }
 
@@ -140,6 +150,11 @@ class VideoPlayerManager {
     try {
       this.currentVideo = video;
       this.videoStartTime = Date.now();
+
+      // Initialize tracking variables for this video session
+      this.totalWatchTime = 0;
+      this.sessionSimilarityScores = [];
+      this.videoWatchStartTime = null;
 
       // Start video session
       const sessionResponse = await window.api.startVideoSession(
@@ -509,6 +524,125 @@ class VideoPlayerManager {
     // No in-headset controls needed since desktop controls work
   }
 
+  async checkAndReportVideoCompletion() {
+    if (!this.currentVideo) {
+      console.log("📊 No current video to check completion");
+      return;
+    }
+
+    const student = window.getCurrentStudent();
+    if (!student || student.is_admin) {
+      console.log("📊 Skipping completion check (no student or admin user)");
+      return;
+    }
+
+    // Get video duration
+    const videoPlayer = document.getElementById("video-player");
+    if (!videoPlayer || !videoPlayer.duration) {
+      console.log("📊 Video duration not available");
+      return;
+    }
+
+    const videoDuration = videoPlayer.duration; // in seconds
+    const watchPercentage = (this.totalWatchTime / videoDuration) * 100;
+
+    // Calculate average similarity score
+    let avgSimilarity = 0;
+    if (this.sessionSimilarityScores.length > 0) {
+      const sum = this.sessionSimilarityScores.reduce((a, b) => a + b, 0);
+      avgSimilarity = (sum / this.sessionSimilarityScores.length) * 100; // Convert to percentage
+    }
+
+    console.log(`📊 Video Completion Check:
+      - Video: ${this.currentVideo.title}
+      - Watch time: ${Math.floor(this.totalWatchTime)}s / ${Math.floor(videoDuration)}s (${watchPercentage.toFixed(1)}%)
+      - Average similarity: ${avgSimilarity.toFixed(1)}% (${this.sessionSimilarityScores.length} scores)
+      - Required watch: ${this.MIN_VIDEO_WATCH_PERCENTAGE}%
+      - Required similarity: ${this.MIN_SIMILARITY_PERCENTAGE}%`);
+
+    // Check if both criteria are met
+    if (
+      watchPercentage >= this.MIN_VIDEO_WATCH_PERCENTAGE &&
+      avgSimilarity >= this.MIN_SIMILARITY_PERCENTAGE
+    ) {
+      console.log("✅ Video completion criteria met! Reporting to server...");
+      await this.reportVideoCompletionToServer(
+        student.student_id,
+        this.currentVideo.order_index || 0,
+        avgSimilarity,
+        watchPercentage,
+      );
+    } else {
+      console.log(`⏭️ Video completion criteria NOT met:
+        - Watch percentage: ${watchPercentage.toFixed(1)}% ${watchPercentage >= this.MIN_VIDEO_WATCH_PERCENTAGE ? "✓" : "✗"}
+        - Similarity: ${avgSimilarity.toFixed(1)}% ${avgSimilarity >= this.MIN_SIMILARITY_PERCENTAGE ? "✓" : "✗"}`);
+    }
+  }
+
+  async reportVideoCompletionToServer(
+    studentId,
+    videoNumber,
+    avgSimilarity,
+    watchPercentage,
+  ) {
+    try {
+      // 1. Update local database first
+      console.log("💾 Updating local database...");
+      const similarityScore = avgSimilarity / 100; // Convert percentage back to 0-1 range
+
+      try {
+        await window.api.updateStudentProgress(
+          studentId,
+          this.currentVideo.id,
+          true, // completed
+          similarityScore,
+        );
+        console.log("✅ Local database updated");
+      } catch (localError) {
+        console.warn("⚠️ Failed to update local database:", localError);
+        // Continue anyway to try external server
+      }
+
+      // 2. Send to external server
+      const serverEndpoint = "http://150.136.241.0:5000/uploadVideoResults";
+
+      const payload = {
+        id: studentId,
+        videoNumber: videoNumber,
+        status: "1", // Completed
+        similarity: avgSimilarity.toFixed(2),
+        watchPercentage: watchPercentage.toFixed(2),
+      };
+
+      console.log("📤 Sending completion data to external server:", payload);
+
+      const response = await fetch(serverEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("✅ Server response:", data);
+        this.showNotification(
+          "Video completion reported to server!",
+          "success",
+        );
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+    } catch (error) {
+      console.error("❌ Error sending completion data to server:", error);
+      this.showNotification(
+        "Failed to report video completion to server",
+        "warning",
+      );
+    }
+  }
+
   showVRButton() {
     const enterVRBtn = document.getElementById("enter-vr-button");
     if (enterVRBtn) {
@@ -526,6 +660,15 @@ class VideoPlayerManager {
   async closeVideo(options = {}) {
     const { silentStop = false } = options;
     console.log("🔚 Closing video");
+
+    // Calculate final watch time if video is still playing
+    if (this.videoWatchStartTime) {
+      this.totalWatchTime += (Date.now() - this.videoWatchStartTime) / 1000;
+      this.videoWatchStartTime = null;
+    }
+
+    // Check if video completion criteria are met
+    await this.checkAndReportVideoCompletion();
 
     // Exit VR mode if active
     if (this.isVRMode) {
@@ -585,6 +728,8 @@ class VideoPlayerManager {
     this.videoStartTime = null;
     this.pendingLiveConfidence = null;
     this.lastLiveConfidence = null;
+    this.totalWatchTime = 0;
+    this.sessionSimilarityScores = [];
 
     // Clear transcription
     this.clearTranscription();
@@ -1040,6 +1185,15 @@ class VideoPlayerManager {
         : typeof evaluationData.similarity === "number"
           ? evaluationData.similarity
           : 0;
+
+    // Track similarity score for completion calculation
+    if (similarity > 0) {
+      this.sessionSimilarityScores.push(similarity);
+      console.log(
+        `📊 Tracked similarity: ${(similarity * 100).toFixed(1)}% (${this.sessionSimilarityScores.length} scores)`,
+      );
+    }
+
     const wer =
       typeof result.wer === "number"
         ? result.wer
@@ -1194,14 +1348,27 @@ class VideoPlayerManager {
   // Video player controls
   onVideoPlay() {
     console.log("▶️ Video started playing");
+    // Start tracking watch time
+    this.videoWatchStartTime = Date.now();
   }
 
   onVideoPause() {
     console.log("⏸️ Video paused");
+    // Accumulate watch time
+    if (this.videoWatchStartTime) {
+      this.totalWatchTime += (Date.now() - this.videoWatchStartTime) / 1000; // in seconds
+      this.videoWatchStartTime = null;
+      console.log(`⏱️ Total watch time: ${Math.floor(this.totalWatchTime)}s`);
+    }
   }
 
   onVideoEnd() {
     console.log("🏁 Video ended");
+    // Accumulate final watch time
+    if (this.videoWatchStartTime) {
+      this.totalWatchTime += (Date.now() - this.videoWatchStartTime) / 1000;
+      this.videoWatchStartTime = null;
+    }
     // Auto-stop recording if still active
     if (this.isRecording) {
       this.stopRecording();

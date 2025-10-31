@@ -8,4 +8,3 @@ certs/
 **__pycache__**
 **.ruff_cache**
 *.db
-*.key
